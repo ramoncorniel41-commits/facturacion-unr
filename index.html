@@ -1,0 +1,2732 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Facturación UNR — Edenorte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script>
+  tailwind.config = {
+    darkMode: ['class', '[data-theme="dark"]'],
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Inter Tight"', 'system-ui', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --bg-elev: #ffffff;
+    --bg-sunken: #f4f4f3;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-muted: #57534e;
+    --text-faint: #a8a29e;
+    --accent: #0a4d8c;
+    --accent-soft: #e0eefb;
+    --success: #15803d;
+    --success-soft: #dcfce7;
+    --warning: #b45309;
+    --warning-soft: #fef3c7;
+    --danger: #b91c1c;
+    --danger-soft: #fee2e2;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow: 0 2px 6px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.10), 0 4px 10px rgba(0,0,0,0.05);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0a09;
+    --bg-elev: #1c1917;
+    --bg-sunken: #161413;
+    --border: #292524;
+    --border-strong: #44403c;
+    --text: #fafaf9;
+    --text-muted: #a8a29e;
+    --text-faint: #57534e;
+    --accent: #3b82f6;
+    --accent-soft: #1e3a5f;
+    --success: #22c55e;
+    --success-soft: #14361f;
+    --warning: #f59e0b;
+    --warning-soft: #3d2c10;
+    --danger: #ef4444;
+    --danger-soft: #3d1414;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+  /* ===== LAYOUT ===== */
+  .app-shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .app-header {
+    grid-column: 1 / -1;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 20px; gap: 16px;
+    z-index: 10;
+  }
+  .app-sidebar {
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 12px 8px;
+  }
+  .app-main {
+    overflow-y: auto;
+    padding: 24px 32px;
+    background: var(--bg);
+  }
+
+  /* ===== HEADER ===== */
+  .brand {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.02em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .brand-mark {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    color: white;
+    font-weight: 800;
+    font-size: 13px;
+  }
+  .header-pill {
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--bg-sunken);
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    border: 1px solid var(--border);
+  }
+  .header-pill.unsaved {
+    background: var(--warning-soft);
+    color: var(--warning);
+    border-color: var(--warning);
+  }
+  .header-pill.saved {
+    background: var(--success-soft);
+    color: var(--success);
+  }
+
+  /* ===== SIDEBAR NAV ===== */
+  .nav-section {
+    padding: 8px 8px 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-muted);
+    transition: background 0.12s, color 0.12s;
+    user-select: none;
+  }
+  .nav-item:hover { background: var(--bg-sunken); color: var(--text); }
+  .nav-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-icon {
+    width: 18px; height: 18px;
+    display: inline-grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 11px;
+    background: var(--bg-sunken);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--text-muted);
+  }
+  .nav-item.active .nav-badge {
+    background: var(--accent);
+    color: white;
+  }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--text);
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg-sunken); border-color: var(--border-strong); }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { filter: brightness(1.1); background: var(--accent); }
+  .btn-success { background: var(--success); color: white; border-color: var(--success); }
+  .btn-success:hover { filter: brightness(1.1); }
+  .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
+  .btn-danger:hover { filter: brightness(1.1); }
+  .btn-ghost { background: transparent; border-color: transparent; }
+  .btn-ghost:hover { background: var(--bg-sunken); }
+  .btn-sm { padding: 3px 8px; font-size: 12px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+  }
+
+  /* ===== KPI ===== */
+  .kpi {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .kpi-sub.up { color: var(--success); }
+  .kpi-sub.down { color: var(--danger); }
+
+  /* ===== TABLES ===== */
+  .tbl-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: auto;
+    background: var(--bg-elev);
+  }
+  table.tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.tbl th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--bg-sunken);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+  }
+  table.tbl td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  table.tbl tr:hover td { background: var(--bg-sunken); }
+  table.tbl tr.selected td { background: var(--accent-soft); }
+  table.tbl td.num { text-align: right; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  table.tbl td.editable {
+    cursor: text;
+  }
+  table.tbl td.editable:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: var(--accent-soft);
+  }
+  table.tbl td.calc {
+    background: var(--bg-sunken);
+    color: var(--text-muted);
+  }
+  table.tbl td.warn { color: var(--warning); font-weight: 600; }
+
+  /* ===== FORMS ===== */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .form-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .form-field { display: flex; flex-direction: column; gap: 4px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .form-input, .form-select, .form-textarea {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-elev);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
+  }
+  .form-input.mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ===== BADGES ===== */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .badge-success { background: var(--success-soft); color: var(--success); }
+  .badge-warning { background: var(--warning-soft); color: var(--warning); }
+  .badge-danger { background: var(--danger-soft); color: var(--danger); }
+  .badge-muted { background: var(--bg-sunken); color: var(--text-muted); }
+  .badge-info { background: var(--accent-soft); color: var(--accent); }
+
+  /* ===== MODAL ===== */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--bg-elev);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    max-width: 720px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+  }
+  .modal.wide { max-width: 1000px; }
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .modal-body { padding: 20px; }
+  .modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 8px;
+    background: var(--bg-sunken);
+    border-radius: 0 0 10px 10px;
+  }
+
+  /* ===== TOAST ===== */
+  .toast-wrap {
+    position: fixed; top: 70px; right: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 200;
+    max-width: 360px;
+  }
+  .toast {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: var(--shadow);
+    font-size: 13px;
+    animation: slideIn 0.2s ease;
+  }
+  .toast.success { border-left-color: var(--success); }
+  .toast.warning { border-left-color: var(--warning); }
+  .toast.error { border-left-color: var(--danger); }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* ===== EMPTY / LOADING ===== */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== UTILITIES ===== */
+  .page-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px 0;
+  }
+  .page-subtitle {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0 0 20px 0;
+  }
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .toolbar-spacer { flex: 1; }
+  .hidden { display: none !important; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .tab {
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Print */
+  @media print {
+    .app-sidebar, .app-header, .toolbar, .no-print { display: none !important; }
+    .app-shell { display: block; height: auto; }
+    .app-main { padding: 0; overflow: visible; }
+    .card { break-inside: avoid; border: 1px solid #ccc; }
+    body { background: white; color: black; }
+    .print-only { display: block !important; }
+  }
+  .print-only { display: none; }
+
+  /* Scroll style */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed var(--border-strong);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    color: var(--text-muted);
+    transition: all 0.15s;
+    cursor: pointer;
+  }
+  .dropzone:hover, .dropzone.over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* Timeline (adendas) */
+  .timeline {
+    border-left: 2px solid var(--border);
+    padding-left: 18px;
+    margin-left: 10px;
+  }
+  .timeline-item {
+    position: relative;
+    padding-bottom: 16px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -25px; top: 6px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--border-strong);
+    border: 2px solid var(--bg-elev);
+  }
+  .timeline-item.vigente::before {
+    background: var(--success);
+  }
+  .timeline-head {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 14px; margin-bottom: 6px;
+  }
+
+  /* Tablas compactas (Carga Mes, Historial) */
+  .tbl-compact { font-size: 12px; }
+  .tbl-compact th, .tbl-compact td { padding: 4px 6px; }
+  .tbl-input {
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text);
+    padding: 2px 4px;
+    font: inherit;
+    border-radius: 3px;
+  }
+  .tbl-input:hover { border-color: var(--border); }
+  .tbl-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-elev);
+  }
+  .cell-warning {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning);
+    font-weight: 600;
+  }
+  .row-locked {
+    opacity: 0.55;
+    background: var(--bg-subtle);
+  }
+  .row-locked .tbl-input { pointer-events: none; }
+
+  /* Key-value (detalle factura) */
+  .kv {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 6px 12px;
+    font-size: 13px;
+  }
+  .kv-label { color: var(--text-muted); }
+  .kv-value { color: var(--text); font-weight: 500; }
+
+  /* Print / Reportes PDF */
+  .print-doc {
+    background: #ffffff;
+    color: #111827;
+    padding: 32px;
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .print-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #111827;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .print-logo {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #1d4ed8;
+  }
+  .print-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+  .print-tbl th, .print-tbl td {
+    border: 1px solid #9ca3af;
+    padding: 6px 8px;
+    text-align: left;
+  }
+  .print-tbl th {
+    background: #f3f4f6;
+    font-weight: 600;
+  }
+  .print-tbl tr.tot td {
+    font-weight: 700;
+    background: #f9fafb;
+  }
+  .print-firma {
+    margin-top: 60px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+  }
+  .firma-line {
+    border-top: 1px solid #111827;
+    padding-top: 6px;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  @media print {
+    body * { visibility: hidden; }
+    .print-doc, .print-doc * { visibility: visible; }
+    .print-doc {
+      position: absolute; left: 0; top: 0; width: 100%;
+      border: none; box-shadow: none;
+    }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">UNR</div>
+      <span>Facturación UNR <span style="color: var(--text-faint); font-weight: 500;">— Edenorte</span></span>
+    </div>
+    <div class="header-pill mono" id="hdrMes">— sin archivo —</div>
+    <div class="header-pill" id="hdrStatus">Sin cargar</div>
+    <div class="header-pill" id="hdrModo" title="Modo de conexión a OneDrive" style="cursor:pointer;">📥 Manual</div>
+
+    <div style="flex:1"></div>
+
+    <span id="hdrUnsaved" class="header-pill unsaved hidden">● Cambios sin guardar</span>
+    <span id="hdrSaved" class="header-pill saved hidden">✓ Guardado</span>
+
+    <button class="btn btn-ghost btn-sm" id="btnTheme" title="Cambiar tema">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+    <button class="btn" id="btnLoad">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Cargar Excel
+    </button>
+    <button class="btn btn-primary" id="btnSave" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Guardar
+    </button>
+  </header>
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="app-sidebar">
+    <div class="nav-section">Operación</div>
+    <div class="nav-item active" data-route="dashboard">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" data-route="carga">
+      <span class="nav-icon">📋</span> Carga Mensual
+      <span class="nav-badge" id="badgeCarga">0</span>
+    </div>
+    <div class="nav-item" data-route="historial">
+      <span class="nav-icon">✅</span> Historial
+      <span class="nav-badge" id="badgeHistorial">0</span>
+    </div>
+    <div class="nav-item" data-route="reportes">
+      <span class="nav-icon">📄</span> Reportes
+    </div>
+
+    <div class="nav-section">Maestros</div>
+    <div class="nav-item" data-route="clientes">
+      <span class="nav-icon">👥</span> Clientes
+      <span class="nav-badge" id="badgeClientes">0</span>
+    </div>
+    <div class="nav-item" data-route="adendas">
+      <span class="nav-icon">📑</span> Adendas
+      <span class="nav-badge" id="badgeAdendas">0</span>
+    </div>
+    <div class="nav-item" data-route="variables">
+      <span class="nav-icon">📈</span> Variables Mensuales
+    </div>
+
+    <div class="nav-section">Sistema</div>
+    <div class="nav-item" data-route="config">
+      <span class="nav-icon">⚙️</span> Configuración
+    </div>
+    <div class="nav-item" data-route="ayuda">
+      <span class="nav-icon">❓</span> Ayuda
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="app-main" id="mainContent">
+    <!-- views rendered here -->
+  </main>
+
+</div>
+
+<!-- Toasts -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- Modals container -->
+<div id="modalRoot"></div>
+
+<script>
+/* ============================================================================
+ * ESTADO GLOBAL
+ * ============================================================================ */
+const STATE = {
+  wb: null,
+  fileName: 'Facturacion UNR (Ronald). 02-24 mas reciente nuevo CLAUDE.xlsx',
+  dirty: false,
+  route: 'dashboard',
+  // 'manual' = descarga/re-upload | 'directo' = MSAL.js + Graph PUT
+  modoConexion: localStorage.getItem('unr_modo_conexion') || 'manual',
+  msal: { app: null, account: null, token: null, driveItemId: null, driveId: null },
+  data: {
+    clientes: [],
+    adendas: [],
+    reglas: [],
+    calendario: [],
+    variables: [],
+    cargaMes: [],
+    historial: [],
+    config: {},
+  },
+  isoMesActual: '',
+  usuario: '',
+  filters: {
+    clientesQuery: '',
+    clientesSoloActivos: true,
+    adendasClienteId: null,
+    historialMes: '',
+    historialCliente: '',
+    historialMoneda: '',
+  },
+  charts: {},
+};
+
+const SHEETS = {
+  CLIENTES: 'M_Clientes',
+  ADENDAS: 'M_Adendas',
+  REGLAS: 'M_Reglas_Precio',
+  CALENDARIO: 'M_Calendario_Tarifario',
+  VARIABLES: 'T_Variables_Mensuales',
+  CARGA: '\u{1F4CB} Carga Mes',
+  HISTORIAL: '\u2705 Historial Facturado',
+  CONFIG: '\u2699\uFE0F Config',
+};
+
+const COL_CLIENTES = ['cliente_id','nombre','nic','direccion','ciudad','nivel_tension','moneda_facturacion','tipo_contrato','is_active','fecha_alta','fecha_baja','adenda_vigente_id','hoja_calculo','usuario_alta','timestamp_alta','notas'];
+const COL_ADENDAS = ['adenda_id','cliente_id','num_romano','col_origen','fecha_firma','fecha_inicio_vigencia','fecha_fin_vigencia','estado','vigente','precio_energia','clave_precio','precio_pot_punta','precio_pot_base','fnp','fne','techo_energia','techo_monomico','hfo6_base','cpi_energia_base','cpi_potencia_base','regla_potencia','archivo_pdf_url','usuario_carga','timestamp_carga','notas'];
+const COL_VARIABLES = ['iso_mes','anio','mes','hfo_6','hfo_2','carbon','gas','cpi','pot_barre_ref','dc','tc','fnp_edenorte','fne_edenorte','pmc_edn_usd_kwh','mtd1_e','mtd1_pp','mtd1_pb','mtd2_e','mtd2_pp','mtd2_pb','mtd1_idx_e','mtd1_idx_pp','mtd1_idx_pb','mtd2_idx_e','mtd2_idx_pp','mtd2_idx_pb','estado_cierre','usuario_cierre','timestamp_cierre','notas','version','iso_mes_norm'];
+const COL_HISTORIAL = ['Cliente ID','NIC','Cliente','ISO Mes','Fecha Lectura','Adenda','Moneda','NCF','F37 kWh','F38 Pot Fact','F40','F41','F42','F43','F49','F50','F53','F54','F59','F71 TC','Ingreso US$ Eq','Estado','Usuario','Timestamp','Notas'];
+
+/* ============================================================================
+ * HELPERS UI
+ * ============================================================================ */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const el = (tag, attrs = {}, children = []) => {
+  const e = document.createElement(tag);
+  Object.entries(attrs).forEach(([k, v]) => {
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k === 'html') e.innerHTML = v;
+    else if (v !== null && v !== undefined && v !== false) e.setAttribute(k, v);
+  });
+  (Array.isArray(children) ? children : [children]).forEach(c => {
+    if (c == null || c === false) return;
+    if (typeof c === 'string' || typeof c === 'number') e.appendChild(document.createTextNode(String(c)));
+    else e.appendChild(c);
+  });
+  return e;
+};
+
+function toast(msg, kind = 'info', ms = 3500) {
+  const t = el('div', { class: 'toast ' + kind }, msg);
+  $('#toastWrap').appendChild(t);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transition = 'opacity 0.2s';
+    setTimeout(() => t.remove(), 200);
+  }, ms);
+}
+
+function openModal({ title, body, footer, wide = false }) {
+  const root = $('#modalRoot');
+  root.innerHTML = '';
+  const backdrop = el('div', { class: 'modal-backdrop', onclick: (e) => { if (e.target === backdrop) closeModal(); } });
+  const modal = el('div', { class: 'modal' + (wide ? ' wide' : '') });
+  modal.appendChild(el('div', { class: 'modal-header' }, [
+    el('div', { class: 'modal-title' }, title),
+    el('button', { class: 'btn btn-ghost btn-sm', onclick: closeModal }, '\u2715'),
+  ]));
+  const bodyEl = el('div', { class: 'modal-body' });
+  if (typeof body === 'string') bodyEl.innerHTML = body;
+  else if (body) bodyEl.appendChild(body);
+  modal.appendChild(bodyEl);
+  if (footer) {
+    const footEl = el('div', { class: 'modal-footer' });
+    (Array.isArray(footer) ? footer : [footer]).forEach(b => { if (b) footEl.appendChild(b); });
+    modal.appendChild(footEl);
+  }
+  backdrop.appendChild(modal);
+  root.appendChild(backdrop);
+}
+
+function closeModal() { $('#modalRoot').innerHTML = ''; }
+
+function confirmDialog(msg, onYes) {
+  openModal({
+    title: 'Confirmación',
+    body: el('p', { style: 'color: var(--text-muted); white-space: pre-line;' }, msg),
+    footer: [
+      el('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
+      el('button', { class: 'btn btn-danger', onclick: () => { closeModal(); onYes(); } }, 'Confirmar'),
+    ],
+  });
+}
+
+function markDirty(v = true) {
+  STATE.dirty = v;
+  $('#hdrUnsaved').classList.toggle('hidden', !v);
+  $('#hdrSaved').classList.toggle('hidden', v || !STATE.wb);
+  $('#btnSave').disabled = !STATE.wb;
+}
+
+const fmt = {
+  num(v, d = 2) {
+    if (v == null || v === '' || isNaN(v)) return '\u2014';
+    return Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  },
+  int(v) {
+    if (v == null || v === '' || isNaN(v)) return '\u2014';
+    return Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  },
+  usd(v) {
+    if (v == null || v === '' || isNaN(v)) return '\u2014';
+    return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+  pct(v) {
+    if (v == null || v === '' || isNaN(v)) return '\u2014';
+    return (Number(v) * 100).toFixed(1) + '%';
+  },
+  isoMes(v) {
+    if (!v) return '\u2014';
+    if (typeof v === 'string' && /^\d{4}-\d{2}/.test(v)) return v.slice(0, 7);
+    return String(v);
+  },
+};
+
+function serialAFecha(s) {
+  if (s == null || s === '') return null;
+  if (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+  const n = Number(s);
+  if (isNaN(n)) return null;
+  return new Date(Math.round((n - 25569) * 86400 * 1000));
+}
+function fmtFecha(s) {
+  const d = serialAFecha(s);
+  if (!d || isNaN(d)) return '\u2014';
+  return d.toISOString().slice(0, 10);
+}
+function hoyIso() { return new Date().toISOString().slice(0, 10); }
+function hoyTimestamp() { return new Date().toISOString(); }
+
+function esActivo(v) {
+  return v === true || v === 'TRUE' || v === 1 || v === '1' || v === 'V' || String(v).toLowerCase() === 'true';
+}
+
+function mesAnterior(iso) {
+  if (!iso || !/^\d{4}-\d{2}/.test(iso)) return '';
+  const [y, m] = iso.split('-').map(Number);
+  if (m === 1) return `${y - 1}-12`;
+  return `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+function mesSiguiente(iso) {
+  if (!iso || !/^\d{4}-\d{2}/.test(iso)) return '';
+  const [y, m] = iso.split('-').map(Number);
+  if (m === 12) return `${y + 1}-01`;
+  return `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+/* ============================================================================
+ * CARGA / GUARDADO EXCEL
+ * ============================================================================ */
+async function abrirArchivoLocal(file) {
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { cellFormula: true, cellStyles: true, sheetStubs: true, cellDates: false });
+    STATE.wb = wb;
+    STATE.fileName = file.name;
+    procesarWorkbook();
+    toast(`Excel cargado: ${file.name}`, 'success');
+    closeModal();
+    render();
+  } catch (e) {
+    console.error(e);
+    toast('Error al leer el Excel: ' + e.message, 'error');
+  }
+}
+
+async function descargarDesdeOneDrive(url) {
+  if (!url) { toast('Pega la URL compartida primero', 'warning'); return; }
+  let downloadUrl = url;
+  if (url.includes('?')) downloadUrl = url.split('?')[0] + '?download=1';
+  else downloadUrl += '?download=1';
+  try {
+    toast('Descargando desde OneDrive... (puede fallar por CORS)', 'info');
+    const resp = await fetch(downloadUrl, { credentials: 'include' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const buf = await resp.arrayBuffer();
+    const wb = XLSX.read(buf, { cellFormula: true, cellStyles: true, sheetStubs: true, cellDates: false });
+    STATE.wb = wb;
+    localStorage.setItem('unr_onedrive_url', url);
+    procesarWorkbook();
+    toast('Excel cargado desde OneDrive', 'success');
+    closeModal();
+    render();
+  } catch (e) {
+    console.error(e);
+    toast('Fallo CORS o red. Usa "Subir archivo local".', 'error', 5000);
+  }
+}
+
+/* ============================================================================
+ * MSAL.js — Acceso directo a OneDrive vía Microsoft Graph
+ * client_id público de Graph Explorer: de8bc8b5-d9f9-48b1-a8ad-b748da725064
+ * ============================================================================ */
+const MSAL_CONFIG = {
+  auth: {
+    clientId: 'de8bc8b5-d9f9-48b1-a8ad-b748da725064',
+    authority: 'https://login.microsoftonline.com/common',
+    redirectUri: window.location.origin + window.location.pathname,
+  },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
+};
+const MSAL_SCOPES = ['Files.ReadWrite', 'Files.ReadWrite.All', 'User.Read'];
+
+function msalEnsureApp() {
+  if (STATE.msal.app) return STATE.msal.app;
+  if (typeof msal === 'undefined') throw new Error('MSAL no se cargó (CDN bloqueado?)');
+  STATE.msal.app = new msal.PublicClientApplication(MSAL_CONFIG);
+  return STATE.msal.app;
+}
+
+async function msalLogin() {
+  const app = msalEnsureApp();
+  try {
+    const resp = await app.loginPopup({ scopes: MSAL_SCOPES, prompt: 'select_account' });
+    STATE.msal.account = resp.account;
+    STATE.msal.token = resp.accessToken;
+    app.setActiveAccount(resp.account);
+    toast(`Conectado como ${resp.account.username}`, 'success');
+    return resp;
+  } catch (e) {
+    console.error(e);
+    toast('Login cancelado o fallido: ' + (e.message || e), 'error', 6000);
+    throw e;
+  }
+}
+
+async function msalGetToken() {
+  const app = msalEnsureApp();
+  const acc = STATE.msal.account || app.getAllAccounts()[0];
+  if (!acc) return (await msalLogin()).accessToken;
+  try {
+    const r = await app.acquireTokenSilent({ scopes: MSAL_SCOPES, account: acc });
+    STATE.msal.token = r.accessToken;
+    return r.accessToken;
+  } catch (e) {
+    const r = await app.acquireTokenPopup({ scopes: MSAL_SCOPES, account: acc });
+    STATE.msal.token = r.accessToken;
+    return r.accessToken;
+  }
+}
+
+function msalLogout() {
+  const app = STATE.msal.app;
+  if (!app) return;
+  app.logoutPopup({ account: STATE.msal.account });
+  STATE.msal = { app, account: null, token: null, driveItemId: null, driveId: null };
+  toast('Sesión cerrada', 'info');
+}
+
+// Codifica una URL compartida en el formato sharing token que Graph entiende
+function encodeShareUrl(shareUrl) {
+  // Base64-url-safe encoding del URL completo, con prefijo 'u!'
+  const b64 = btoa(shareUrl).replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+  return 'u!' + b64;
+}
+
+async function graphResolveDriveItem(shareUrl) {
+  const token = await msalGetToken();
+  const shareId = encodeShareUrl(shareUrl);
+  const r = await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem`, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error('Graph resolve falló (' + r.status + '): ' + txt.slice(0, 200));
+  }
+  const item = await r.json();
+  STATE.msal.driveItemId = item.id;
+  STATE.msal.driveId = (item.parentReference && item.parentReference.driveId) || null;
+  return item;
+}
+
+async function descargarConGraph(shareUrl) {
+  if (!shareUrl) { toast('Pega la URL compartida primero', 'warning'); return; }
+  try {
+    toast('Iniciando MSAL...', 'info');
+    await msalGetToken();
+    toast('Resolviendo archivo en OneDrive...', 'info');
+    const item = await graphResolveDriveItem(shareUrl);
+    const token = await msalGetToken();
+    toast('Descargando contenido (' + Math.round((item.size || 0) / 1024) + ' KB)...', 'info');
+    const r = await fetch(`https://graph.microsoft.com/v1.0/drives/${item.parentReference.driveId}/items/${item.id}/content`, {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    if (!r.ok) throw new Error('GET content falló: ' + r.status);
+    const buf = await r.arrayBuffer();
+    const wb = XLSX.read(buf, { cellFormula: true, cellStyles: true, sheetStubs: true, cellDates: false });
+    STATE.wb = wb;
+    STATE.fileName = item.name || STATE.fileName;
+    localStorage.setItem('unr_onedrive_url', shareUrl);
+    localStorage.setItem('unr_modo_conexion', 'directo');
+    STATE.modoConexion = 'directo';
+    procesarWorkbook();
+    toast('Excel cargado desde OneDrive (modo directo)', 'success');
+    closeModal();
+    actualizarBadgeModo();
+    render();
+  } catch (e) {
+    console.error(e);
+    toast('MSAL falló: ' + (e.message || e) + '. Cae a modo manual.', 'error', 7000);
+    STATE.modoConexion = 'manual';
+    localStorage.setItem('unr_modo_conexion', 'manual');
+    actualizarBadgeModo();
+  }
+}
+
+async function guardarConGraph() {
+  if (!STATE.wb) { toast('Carga un Excel primero', 'warning'); return; }
+  if (!STATE.msal.driveItemId) {
+    toast('No hay archivo enlazado vía Graph. Recarga en modo directo.', 'warning');
+    return;
+  }
+  try {
+    // Sincronizar TODAS las hojas vivas igual que el guardado manual
+    sincronizarHoja(SHEETS.CLIENTES, STATE.data.clientes);
+    sincronizarHoja(SHEETS.ADENDAS, STATE.data.adendas);
+    sincronizarHoja(SHEETS.VARIABLES, STATE.data.variables);
+    sincronizarHistorial();
+    sincronizarCargaMes();
+    sincronizarConfig();
+
+    const wbout = XLSX.write(STATE.wb, { bookType: 'xlsx', type: 'array', cellStyles: true, compression: true });
+    const token = await msalGetToken();
+    toast('Subiendo a OneDrive (' + Math.round(wbout.byteLength / 1024) + ' KB)...', 'info');
+    const url = `https://graph.microsoft.com/v1.0/drives/${STATE.msal.driveId}/items/${STATE.msal.driveItemId}/content`;
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+      body: wbout,
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error('PUT falló (' + r.status + '): ' + txt.slice(0, 300));
+    }
+    markDirty(false);
+    toast('✓ Guardado directamente en OneDrive', 'success', 4000);
+  } catch (e) {
+    console.error(e);
+    toast('Falló el guardado directo: ' + (e.message || e) + '. Usa modo manual.', 'error', 8000);
+  }
+}
+
+function actualizarBadgeModo() {
+  const badge = $('#hdrModo');
+  if (!badge) return;
+  if (STATE.modoConexion === 'directo' && STATE.msal.account) {
+    badge.textContent = '⚡ Directo · ' + STATE.msal.account.username;
+    badge.style.background = 'var(--success-soft)';
+    badge.style.color = 'var(--success)';
+  } else {
+    badge.textContent = '📥 Manual';
+    badge.style.background = 'var(--bg-sunken)';
+    badge.style.color = 'var(--text-muted)';
+  }
+}
+
+function procesarWorkbook() {
+  const wb = STATE.wb;
+  STATE.data.clientes = leerHoja(wb, SHEETS.CLIENTES);
+  STATE.data.adendas = leerHoja(wb, SHEETS.ADENDAS);
+  STATE.data.reglas = leerHoja(wb, SHEETS.REGLAS);
+  STATE.data.calendario = leerHoja(wb, SHEETS.CALENDARIO);
+  STATE.data.variables = leerHoja(wb, SHEETS.VARIABLES);
+  STATE.data.cargaMes = leerCargaMes(wb);
+  STATE.data.historial = leerHoja(wb, SHEETS.HISTORIAL);
+  STATE.data.config = leerConfig(wb);
+
+  STATE.isoMesActual = String(STATE.data.config.iso_mes_actual || STATE.data.config['B3'] || '').slice(0, 7);
+  STATE.usuario = String(STATE.data.config.usuario || STATE.data.config['B20'] || 'rcornielb');
+
+  $('#hdrMes').textContent = STATE.isoMesActual ? `Mes: ${STATE.isoMesActual}` : '\u2014 sin mes \u2014';
+  $('#hdrStatus').textContent = `${STATE.data.clientes.length} clientes \u00B7 ${STATE.data.historial.length} facturas`;
+  $('#hdrSaved').classList.remove('hidden');
+
+  $('#badgeClientes').textContent = STATE.data.clientes.filter(c => esActivo(c.is_active)).length;
+  $('#badgeAdendas').textContent = STATE.data.adendas.length;
+  $('#badgeHistorial').textContent = STATE.data.historial.length;
+  $('#badgeCarga').textContent = STATE.data.cargaMes.filter(r => r.NIC).length;
+
+  markDirty(false);
+}
+
+function leerHoja(wb, nombre) {
+  const ws = wb.Sheets[nombre];
+  if (!ws) { console.warn('Hoja no encontrada: ' + nombre); return []; }
+  return XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+}
+
+function leerCargaMes(wb) {
+  const ws = wb.Sheets[SHEETS.CARGA];
+  if (!ws) return [];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  let headerRow = -1;
+  for (let i = 0; i < Math.min(15, aoa.length); i++) {
+    const row = aoa[i] || [];
+    if (row.some(c => String(c || '').toUpperCase().includes('NIC'))) { headerRow = i; break; }
+  }
+  if (headerRow < 0) headerRow = 5;
+  const out = [];
+  for (let i = headerRow + 1; i < aoa.length && i < headerRow + 101; i++) {
+    const row = aoa[i] || [];
+    out.push({
+      _row: i,
+      Accion: row[0],
+      NIC: row[1],
+      Cliente: row[2],
+      Adenda: row[3],
+      TipoContrato: row[4],
+      Moneda: row[5],
+      FechaLectura: row[6],
+      NCF: row[7],
+      F37: row[8],
+      F38: row[9],
+      F40: row[10],
+      F41: row[11],
+      F42: row[12],
+      F43: row[13],
+      F49: row[14],
+      F50: row[15],
+      F53: row[16],
+      F54: row[17],
+      F59: row[18],
+      F71: row[19],
+      IngresoUSD: row[20],
+      Estado: row[21],
+      Notas: row[22],
+    });
+  }
+  return out;
+}
+
+function leerConfig(wb) {
+  const ws = wb.Sheets[SHEETS.CONFIG];
+  if (!ws) return {};
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  const config = { _aoa: aoa };
+  aoa.forEach((row, idx) => {
+    const key = row[0];
+    const val = row[1];
+    if (key) {
+      const k = String(key).toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      config[k] = val;
+    }
+    config['B' + (idx + 1)] = val;
+    config['A' + (idx + 1)] = key;
+  });
+  if (!config.iso_mes_actual && config['B3']) config.iso_mes_actual = config['B3'];
+  if (!config.usuario && config['B20']) config.usuario = config['B20'];
+  return config;
+}
+
+function guardarYDescargar() {
+  if (!STATE.wb) { toast('Carga un Excel primero', 'warning'); return; }
+  // Si estamos en modo directo y hay sesión MSAL, escribir directo a OneDrive
+  if (STATE.modoConexion === 'directo' && STATE.msal.driveItemId) {
+    return guardarConGraph();
+  }
+  try {
+    sincronizarHoja(SHEETS.CLIENTES, STATE.data.clientes);
+    sincronizarHoja(SHEETS.ADENDAS, STATE.data.adendas);
+    sincronizarHoja(SHEETS.VARIABLES, STATE.data.variables);
+    sincronizarHistorial();
+    sincronizarCargaMes();
+    sincronizarConfig();
+
+    XLSX.writeFile(STATE.wb, STATE.fileName, { bookType: 'xlsx', cellStyles: true, compression: true });
+    markDirty(false);
+    toast('Archivo descargado. Re-súbelo a OneDrive para sincronizar.', 'success', 5000);
+    mostrarModalResubida();
+  } catch (e) {
+    console.error(e);
+    toast('Error al guardar: ' + e.message, 'error', 6000);
+  }
+}
+
+function sincronizarHoja(nombre, arr) {
+  const ws = STATE.wb.Sheets[nombre];
+  if (!ws) { console.warn('Hoja faltante al guardar: ' + nombre); return; }
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  const headers = (aoa[0] || []);
+  const newRows = [headers];
+  arr.forEach(obj => {
+    const row = headers.map(h => {
+      const key = String(h || '').trim();
+      if (key in obj) return normalizarValor(obj[key]);
+      const lowerKey = key.toLowerCase();
+      const found = Object.keys(obj).find(k => String(k).toLowerCase() === lowerKey);
+      if (found) return normalizarValor(obj[found]);
+      return null;
+    });
+    newRows.push(row);
+  });
+  STATE.wb.Sheets[nombre] = XLSX.utils.aoa_to_sheet(newRows);
+}
+
+function normalizarValor(v) {
+  if (v === undefined) return null;
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+  return v;
+}
+
+function sincronizarHistorial() {
+  const ws = STATE.wb.Sheets[SHEETS.HISTORIAL];
+  if (!ws) return;
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  const headers = (aoa[0] || []).length > 0 ? aoa[0] : COL_HISTORIAL;
+  const rows = [headers];
+  STATE.data.historial.forEach(obj => {
+    rows.push(headers.map(h => normalizarValor(obj[h] !== undefined ? obj[h] : obj[String(h).trim()])));
+  });
+  STATE.wb.Sheets[SHEETS.HISTORIAL] = XLSX.utils.aoa_to_sheet(rows);
+}
+
+function sincronizarCargaMes() {
+  // PRESERVAR FÓRMULAS: solo tocamos columnas de INPUT (A,B,H,I,J,K,L,M,N,O,P,W)
+  const ws = STATE.wb.Sheets[SHEETS.CARGA];
+  if (!ws) return;
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  let headerRow = 5;
+  for (let i = 0; i < Math.min(15, aoa.length); i++) {
+    if ((aoa[i] || []).some(c => String(c || '').toUpperCase().includes('NIC'))) { headerRow = i; break; }
+  }
+  const INPUT_COLS = [
+    { c: 0, k: 'Accion' },
+    { c: 1, k: 'NIC' },
+    { c: 7, k: 'NCF' },
+    { c: 8, k: 'F37' },
+    { c: 9, k: 'F38' },
+    { c: 10, k: 'F40' },
+    { c: 11, k: 'F41' },
+    { c: 12, k: 'F42' },
+    { c: 13, k: 'F43' },
+    { c: 14, k: 'F49' },
+    { c: 15, k: 'F50' },
+    { c: 22, k: 'Notas' },
+  ];
+  STATE.data.cargaMes.forEach((obj, idx) => {
+    const r = headerRow + 1 + idx;
+    INPUT_COLS.forEach(({ c, k }) => {
+      const ref = XLSX.utils.encode_cell({ r, c });
+      const val = obj[k];
+      if (val == null || val === '') {
+        delete ws[ref];
+      } else {
+        ws[ref] = { v: val, t: (typeof val === 'number') ? 'n' : 's' };
+      }
+    });
+  });
+  // También limpiar filas extra que estaban antes (filas más allá de las que ahora hay)
+  const oldRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:W200');
+  oldRange.e.r = Math.max(oldRange.e.r, headerRow + Math.max(100, STATE.data.cargaMes.length));
+  ws['!ref'] = XLSX.utils.encode_range(oldRange);
+}
+
+function sincronizarConfig() {
+  const ws = STATE.wb.Sheets[SHEETS.CONFIG];
+  if (!ws) return;
+  if (STATE.isoMesActual && STATE.isoMesActual !== STATE.data.config['B3']) {
+    ws['B3'] = { v: STATE.isoMesActual, t: 's' };
+    STATE.data.config['B3'] = STATE.isoMesActual;
+  }
+  if (STATE.usuario) {
+    ws['B20'] = { v: STATE.usuario, t: 's' };
+  }
+}
+
+function mostrarModalResubida() {
+  const url = localStorage.getItem('unr_onedrive_url') || '';
+  openModal({
+    title: 'Archivo descargado \u2713',
+    body: el('div', {}, [
+      el('p', { style: 'margin-bottom: 12px;' }, 'El archivo .xlsx fue descargado. Para sincronizar con OneDrive:'),
+      el('ol', { style: 'padding-left: 20px; color: var(--text-muted); font-size: 13px; line-height: 1.8;' }, [
+        el('li', {}, 'Abre tu carpeta de OneDrive (web o explorador).'),
+        el('li', {}, 'Arrastra el archivo descargado sobre el original (sobrescribir).'),
+        el('li', {}, 'OneDrive sube la nueva versión automáticamente.'),
+      ]),
+      url ? el('p', { style: 'margin-top: 12px;' }, [
+        el('a', { href: url, target: '_blank', class: 'btn btn-primary' }, '\u2197 Abrir OneDrive'),
+      ]) : null,
+    ]),
+    footer: [el('button', { class: 'btn btn-primary', onclick: closeModal }, 'Entendido')],
+  });
+}
+
+/* CARGA INICIAL — MODAL */
+function mostrarModalCarga() {
+  const savedUrl = localStorage.getItem('unr_onedrive_url') || '';
+
+  const tab1 = el('div', { id: 'tab-local' }, [
+    el('p', { style: 'color: var(--text-muted); margin-bottom: 12px;' },
+      'Modo recomendado. Sin problemas de CORS. Re-subes manualmente al guardar.'),
+    el('div', { class: 'dropzone', id: 'dropZone' }, [
+      el('div', { style: 'font-size: 28px; margin-bottom: 8px;' }, '\u{1F4C2}'),
+      el('div', { style: 'font-weight: 600; margin-bottom: 4px;' }, 'Arrastra el .xlsx aquí'),
+      el('div', { style: 'font-size: 12px;' }, 'o haz clic para seleccionar'),
+      el('input', { type: 'file', accept: '.xlsx,.xlsm', style: 'display: none;', id: 'fileInput' }),
+    ]),
+  ]);
+
+  const tab2 = el('div', { id: 'tab-onedrive', class: 'hidden' }, [
+    el('p', { style: 'color: var(--text-muted); margin-bottom: 12px;' },
+      '\u26A0\uFE0F Puede fallar por CORS de SharePoint. Si falla, usa "Subir archivo local".'),
+    el('div', { class: 'form-field full' }, [
+      el('label', { class: 'form-label' }, 'URL compartida de OneDrive'),
+      el('input', { class: 'form-input', type: 'url', id: 'inputUrl', value: savedUrl, placeholder: 'https://...sharepoint.com/...' }),
+    ]),
+    el('button', { class: 'btn btn-primary', style: 'margin-top: 12px;', onclick: () => {
+      descargarDesdeOneDrive($('#inputUrl').value.trim());
+    }}, 'Descargar Excel'),
+  ]);
+
+  const tab3 = el('div', { id: 'tab-msal', class: 'hidden' }, [
+    el('p', { style: 'color: var(--text-muted); margin-bottom: 12px;' },
+      '\u26A1 Login con tu cuenta @edenorte.com.do (popup Microsoft). Lectura y escritura directa al .xlsx. ' +
+      'Si IT bloquea el client_id p\u00FAblico, caemos a modo manual autom\u00E1ticamente.'),
+    el('div', { class: 'form-field full' }, [
+      el('label', { class: 'form-label' }, 'URL compartida de OneDrive'),
+      el('input', { class: 'form-input', type: 'url', id: 'inputUrlMsal', value: savedUrl, placeholder: 'https://...sharepoint.com/...' }),
+    ]),
+    el('div', { style: 'display:flex; gap:8px; margin-top: 12px; flex-wrap:wrap;' }, [
+      el('button', { class: 'btn btn-primary', onclick: () => {
+        descargarConGraph($('#inputUrlMsal').value.trim());
+      }}, '\u26A1 Login y cargar'),
+      el('button', { class: 'btn', onclick: () => msalLogout() }, 'Cerrar sesi\u00F3n MSAL'),
+    ]),
+    el('div', { style: 'margin-top: 16px; font-size: 12px; color: var(--text-faint);' },
+      'client_id: de8bc8b5-d9f9-48b1-a8ad-b748da725064 (Graph Explorer p\u00FAblico, sin Azure AD).'),
+  ]);
+
+  openModal({
+    title: 'Cargar archivo Excel',
+    body: el('div', {}, [
+      el('div', { class: 'tabs' }, [
+        el('div', { class: 'tab active', 'data-tab': 'local', onclick: (e) => switchTab(e, 'local') }, 'Subir archivo local'),
+        el('div', { class: 'tab', 'data-tab': 'onedrive', onclick: (e) => switchTab(e, 'onedrive') }, 'OneDrive (fetch)'),
+        el('div', { class: 'tab', 'data-tab': 'msal', onclick: (e) => switchTab(e, 'msal') }, '\u26A1 Directo (MSAL)'),
+      ]),
+      tab1,
+      tab2,
+      tab3,
+    ]),
+    footer: [el('button', { class: 'btn', onclick: closeModal }, 'Cancelar')],
+  });
+
+  setTimeout(() => {
+    const dz = $('#dropZone');
+    const inp = $('#fileInput');
+    if (!dz) return;
+    dz.addEventListener('click', () => inp.click());
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('over');
+      if (e.dataTransfer.files[0]) abrirArchivoLocal(e.dataTransfer.files[0]);
+    });
+    inp.addEventListener('change', e => { if (e.target.files[0]) abrirArchivoLocal(e.target.files[0]); });
+  }, 50);
+}
+
+function switchTab(e, tab) {
+  $$('.modal .tab').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  $('#tab-local').classList.toggle('hidden', tab !== 'local');
+  $('#tab-onedrive').classList.toggle('hidden', tab !== 'onedrive');
+  const tm = $('#tab-msal'); if (tm) tm.classList.toggle('hidden', tab !== 'msal');
+}
+/* ====================================================================
+ * PARTE 3 — Navegación, Dashboard, Clientes, Adendas, Variables
+ * ==================================================================== */
+
+function destruirCharts() {
+  Object.values(STATE.charts || {}).forEach(c => { try { c.destroy(); } catch (e) {} });
+  STATE.charts = {};
+}
+
+function setupNav() {
+  $$('.nav-item').forEach(it => {
+    it.addEventListener('click', () => {
+      const r = it.dataset.route;
+      $$('.nav-item').forEach(x => x.classList.remove('active'));
+      it.classList.add('active');
+      STATE.route = r;
+      render();
+    });
+  });
+}
+
+function render() {
+  destruirCharts();
+  const main = $('#mainContent');
+  if (!main) return;
+  if (!STATE.wb) { renderWelcome(main); return; }
+  const r = STATE.route || 'dashboard';
+  switch (r) {
+    case 'dashboard': return renderDashboard(main);
+    case 'carga':     return renderCarga(main);
+    case 'historial': return renderHistorial(main);
+    case 'reportes':  return renderReportes(main);
+    case 'clientes':  return renderClientes(main);
+    case 'adendas':   return renderAdendas(main);
+    case 'variables': return renderVariables(main);
+    case 'config':    return renderConfig(main);
+    case 'ayuda':     return renderAyuda(main);
+    default:          return renderDashboard(main);
+  }
+}
+
+function renderWelcome(main) {
+  main.innerHTML = '';
+  const card = el('div', { class: 'card', style: 'max-width:720px;margin:48px auto;' }, [
+    el('h1', { style: 'font-size:24px;margin-bottom:8px;' }, 'Facturación UNR \u2014 Edenorte'),
+    el('p', { class: 'muted', style: 'margin-bottom:24px;' },
+      'Sistema de gestión de facturación para Usuarios No Regulados. Cargue el archivo Excel para comenzar.'),
+    el('button', { class: 'btn btn-primary', onclick: mostrarModalCarga }, '📂 Abrir archivo'),
+    el('div', { style: 'margin-top:24px;padding-top:24px;border-top:1px solid var(--border);' }, [
+      el('h3', { style: 'margin-bottom:8px;font-size:14px;' }, 'Módulos disponibles'),
+      el('ul', { style: 'margin-left:20px;color:var(--text-muted);font-size:13px;line-height:1.8;' }, [
+        el('li', {}, 'Dashboard ejecutivo con KPIs y gráficos'),
+        el('li', {}, 'Carga mensual de lecturas (réplica de 📋 Carga Mes)'),
+        el('li', {}, 'CRUD de clientes y adendas con regla de vigencia única'),
+        el('li', {}, 'Editor de variables mensuales con cierre de ciclo'),
+        el('li', {}, 'Historial filtrable y exportable'),
+        el('li', {}, 'Reportes PDF vía window.print()'),
+      ]),
+    ]),
+  ]);
+  main.appendChild(card);
+}
+
+/* ============ DASHBOARD ============ */
+
+function kpi(label, value, hint, tone) {
+  const valueEl = el('div', { class: 'kpi-value' });
+  const span = el('span', {}, String(value));
+  if (tone) span.style.color = `var(--${tone})`;
+  valueEl.appendChild(span);
+  return el('div', { class: 'kpi' }, [
+    el('div', { class: 'kpi-label' }, label),
+    valueEl,
+    hint ? el('div', { class: 'kpi-hint' }, hint) : null,
+  ].filter(Boolean));
+}
+
+function renderDashboard(main) {
+  const mes = STATE.isoMesActual || hoyIso().slice(0, 7);
+  const clientes = STATE.data.clientes || [];
+  const adendas = STATE.data.adendas || [];
+  const historial = STATE.data.historial || [];
+
+  const clientesActivos = clientes.filter(c => esActivo(c.is_active)).length;
+  const adendasVigentes = adendas.filter(a => esActivo(a.vigente)).length;
+  const facturasMes = historial.filter(h => h['ISO Mes'] === mes && h.Estado !== 'anulada');
+  const facturados = facturasMes.length;
+  const pendientes = Math.max(0, clientesActivos - facturados);
+  const ingresoMes = facturasMes.reduce((s, h) => s + (Number(h['Ingreso US$ Eq']) || 0), 0);
+  const anioActual = mes.slice(0, 4);
+  const ingresoYTD = historial
+    .filter(h => String(h['ISO Mes'] || '').startsWith(anioActual) && h.Estado !== 'anulada')
+    .reduce((s, h) => s + (Number(h['Ingreso US$ Eq']) || 0), 0);
+
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [
+    el('h1', {}, 'Dashboard'),
+    el('div', { class: 'muted' }, `Mes en curso: ${mes}`),
+  ]));
+
+  main.appendChild(el('div', { class: 'kpi-grid' }, [
+    kpi('Clientes activos', clientesActivos, `${clientes.length} totales`),
+    kpi('Facturados mes', facturados, `de ${clientesActivos} activos`, facturados >= clientesActivos ? 'success' : null),
+    kpi('Pendientes', pendientes, mes, pendientes > 0 ? 'warning' : 'success'),
+    kpi('Ingreso mes', fmt.usd(ingresoMes), `US$ \u2014 ${mes}`),
+    kpi('Ingreso YTD', fmt.usd(ingresoYTD), `Año ${anioActual}`),
+    kpi('Adendas vigentes', adendasVigentes, `${adendas.length} totales`),
+  ]));
+
+  main.appendChild(el('div', { class: 'grid-2', style: 'margin-top:16px;' }, [
+    el('div', { class: 'card' }, [
+      el('div', { class: 'card-title' }, 'Ingreso mensual \u2014 últimos 12 meses'),
+      el('div', { class: 'chart-wrap' }, [el('canvas', { id: 'chartIngresoMensual' })]),
+    ]),
+    el('div', { class: 'card' }, [
+      el('div', { class: 'card-title' }, 'Distribución por tipo de contrato'),
+      el('div', { class: 'chart-wrap' }, [el('canvas', { id: 'chartTipoContrato' })]),
+    ]),
+    el('div', { class: 'card' }, [
+      el('div', { class: 'card-title' }, 'Top 10 clientes \u2014 ingreso YTD'),
+      el('div', { class: 'chart-wrap' }, [el('canvas', { id: 'chartTopClientes' })]),
+    ]),
+    el('div', { class: 'card' }, [
+      el('div', { class: 'card-title' }, 'Rentabilidad: ingreso vs compra'),
+      el('div', { class: 'chart-wrap' }, [el('canvas', { id: 'chartRentab' })]),
+    ]),
+  ]));
+
+  // Anomalías
+  const anomalias = calcularAnomalias(historial, mes);
+  if (anomalias.length) {
+    main.appendChild(el('div', { class: 'card', style: 'margin-top:16px;' }, [
+      el('div', { class: 'card-title' }, `⚠️ Anomalías \u2014 Δ kWh > 30% vs mes anterior (${anomalias.length})`),
+      el('div', { class: 'tbl-wrap' }, [
+        el('table', { class: 'tbl' }, [
+          el('thead', {}, [el('tr', {}, ['Cliente', 'kWh actual', 'kWh anterior', 'Δ %', 'Ingreso'].map(h => el('th', {}, h)))]),
+          el('tbody', {}, anomalias.map(a => {
+            const colorVar = a.delta > 0 ? 'warning' : 'danger';
+            const cell = el('td', { style: `color:var(--${colorVar});font-weight:600;` }, fmt.pct(a.delta));
+            return el('tr', {}, [
+              el('td', {}, a.cliente),
+              el('td', {}, fmt.num(a.kwh, 0)),
+              el('td', {}, fmt.num(a.kwhPrev, 0)),
+              cell,
+              el('td', {}, fmt.usd(a.ingreso)),
+            ]);
+          })),
+        ]),
+      ]),
+    ]));
+  }
+
+  setTimeout(() => dibujarChartsDashboard(historial, clientes, mes), 50);
+}
+
+function calcularAnomalias(historial, mes) {
+  const prev = mesAnterior(mes);
+  const actuales = historial.filter(h => h['ISO Mes'] === mes && h.Estado !== 'anulada');
+  const prevs = {};
+  historial.filter(h => h['ISO Mes'] === prev && h.Estado !== 'anulada').forEach(h => {
+    prevs[h['Cliente ID']] = Number(h['F37 kWh']) || 0;
+  });
+  const anomalias = [];
+  for (const h of actuales) {
+    const kwh = Number(h['F37 kWh']) || 0;
+    const kwhPrev = prevs[h['Cliente ID']] || 0;
+    if (kwhPrev === 0) continue;
+    const delta = (kwh - kwhPrev) / kwhPrev;
+    if (Math.abs(delta) > 0.30) {
+      anomalias.push({ cliente: h.Cliente, kwh, kwhPrev, delta, ingreso: Number(h['Ingreso US$ Eq']) || 0 });
+    }
+  }
+  return anomalias.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
+function chartColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    text: isDark ? '#e5e7eb' : '#1f2937',
+    grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    palette: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'],
+  };
+}
+
+function dibujarChartsDashboard(historial, clientes, mes) {
+  const C = chartColors();
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: C.text, font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: C.text, font: { size: 10 } }, grid: { color: C.grid } },
+      y: { ticks: { color: C.text, font: { size: 10 } }, grid: { color: C.grid } },
+    },
+  };
+
+  const meses12 = [];
+  let m = mes;
+  for (let i = 0; i < 12; i++) { meses12.unshift(m); m = mesAnterior(m); }
+  const ingresoXmes = meses12.map(mm =>
+    historial.filter(h => h['ISO Mes'] === mm && h.Estado !== 'anulada')
+      .reduce((s, h) => s + (Number(h['Ingreso US$ Eq']) || 0), 0)
+  );
+  const ctxA = $('#chartIngresoMensual');
+  if (ctxA) STATE.charts.a = new Chart(ctxA, {
+    type: 'line',
+    data: { labels: meses12, datasets: [{ label: 'Ingreso US$', data: ingresoXmes, borderColor: C.palette[0], backgroundColor: C.palette[0] + '20', fill: true, tension: 0.3 }] },
+    options: baseOpts,
+  });
+
+  const tipos = {};
+  clientes.filter(c => esActivo(c.is_active)).forEach(c => {
+    const t = c.tipo_contrato || 'N/D';
+    tipos[t] = (tipos[t] || 0) + 1;
+  });
+  const ctxB = $('#chartTipoContrato');
+  if (ctxB) STATE.charts.b = new Chart(ctxB, {
+    type: 'doughnut',
+    data: { labels: Object.keys(tipos), datasets: [{ data: Object.values(tipos), backgroundColor: C.palette }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: C.text, font: { size: 11 } } } } },
+  });
+
+  const anio = mes.slice(0, 4);
+  const porCliente = {};
+  historial.filter(h => String(h['ISO Mes'] || '').startsWith(anio) && h.Estado !== 'anulada').forEach(h => {
+    porCliente[h.Cliente] = (porCliente[h.Cliente] || 0) + (Number(h['Ingreso US$ Eq']) || 0);
+  });
+  const top10 = Object.entries(porCliente).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const ctxC = $('#chartTopClientes');
+  if (ctxC) STATE.charts.c = new Chart(ctxC, {
+    type: 'bar',
+    data: { labels: top10.map(x => x[0]), datasets: [{ label: 'US$ YTD', data: top10.map(x => x[1]), backgroundColor: C.palette[1] }] },
+    options: Object.assign({}, baseOpts, { indexAxis: 'y' }),
+  });
+
+  const variables = STATE.data.variables || [];
+  const ingreso = meses12.map(mm =>
+    historial.filter(h => h['ISO Mes'] === mm && h.Estado !== 'anulada')
+      .reduce((s, h) => s + (Number(h['Ingreso US$ Eq']) || 0), 0)
+  );
+  const compra = meses12.map(mm => {
+    const v = variables.find(x => x.iso_mes === mm);
+    const pmc = v ? (Number(v.pmc_edn_usd_kwh) || 0) : 0;
+    const kwh = historial.filter(h => h['ISO Mes'] === mm && h.Estado !== 'anulada')
+      .reduce((s, h) => s + (Number(h['F37 kWh']) || 0), 0);
+    return pmc * kwh;
+  });
+  const ctxD = $('#chartRentab');
+  if (ctxD) STATE.charts.d = new Chart(ctxD, {
+    type: 'bar',
+    data: {
+      labels: meses12,
+      datasets: [
+        { label: 'Ingreso US$', data: ingreso, backgroundColor: C.palette[0] },
+        { label: 'Compra UNR estimada US$', data: compra, backgroundColor: C.palette[3] },
+      ],
+    },
+    options: baseOpts,
+  });
+}
+
+/* ============ CLIENTES ============ */
+
+function renderClientes(main) {
+  const clientes = STATE.data.clientes || [];
+  main.innerHTML = '';
+
+  const searchInp = el('input', { class: 'form-input form-input-sm', id: 'cliSearch',
+    placeholder: '🔍 Buscar por nombre o NIC...', style: 'width:280px;' });
+  const activosChk = el('input', { type: 'checkbox', id: 'cliSoloActivos', checked: '' });
+  const lblActivos = el('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;' }, [activosChk, ' Solo activos']);
+
+  main.appendChild(el('div', { class: 'page-head' }, [
+    el('h1', {}, 'Clientes'),
+    el('div', { class: 'page-actions' }, [
+      searchInp,
+      lblActivos,
+      el('button', { class: 'btn btn-primary btn-sm', onclick: () => modalCliente() }, '+ Nuevo cliente'),
+    ]),
+  ]));
+
+  const cont = el('div', { class: 'card', id: 'cliCont' });
+  main.appendChild(cont);
+
+  function pintar() {
+    const q = (searchInp.value || '').toLowerCase().trim();
+    const soloActivos = activosChk.checked;
+    let rows = clientes.slice();
+    if (soloActivos) rows = rows.filter(c => esActivo(c.is_active));
+    if (q) rows = rows.filter(c =>
+      String(c.nombre || '').toLowerCase().includes(q) ||
+      String(c.nic || '').includes(q) ||
+      String(c.ciudad || '').toLowerCase().includes(q)
+    );
+    rows.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || '')));
+    cont.innerHTML = '';
+    const tbody = el('tbody', {});
+    if (!rows.length) {
+      tbody.appendChild(el('tr', {}, [el('td', { colspan: '9', style: 'text-align:center;padding:32px;color:var(--text-muted);' }, 'No hay clientes')]));
+    } else {
+      rows.forEach(c => {
+        const badge = el('span', { class: 'badge ' + (esActivo(c.is_active) ? 'ok' : 'danger') }, esActivo(c.is_active) ? 'Activo' : 'Baja');
+        const btnEdit = el('button', { class: 'btn btn-sm', onclick: (e) => { e.stopPropagation(); modalCliente(c); } }, '✎');
+        tbody.appendChild(el('tr', { onclick: () => modalCliente(c), style: 'cursor:pointer;' }, [
+          el('td', {}, String(c.cliente_id || '')),
+          el('td', { style: 'font-weight:500;' }, String(c.nombre || '')),
+          el('td', {}, String(c.nic || '')),
+          el('td', {}, String(c.ciudad || '')),
+          el('td', {}, String(c.tipo_contrato || '')),
+          el('td', {}, String(c.moneda_facturacion || '')),
+          el('td', {}, String(c.adenda_vigente_id || '\u2014')),
+          el('td', {}, [badge]),
+          el('td', {}, [btnEdit]),
+        ]));
+      });
+    }
+    cont.appendChild(el('div', { class: 'tbl-wrap' }, [
+      el('table', { class: 'tbl' }, [
+        el('thead', {}, [el('tr', {}, ['ID','Nombre','NIC','Ciudad','Tipo','Moneda','Adenda','Estado',''].map(h => el('th', {}, h)))]),
+        tbody,
+      ]),
+    ]));
+    $('#badgeClientes').textContent = rows.length;
+  }
+  pintar();
+  searchInp.oninput = pintar;
+  activosChk.onchange = pintar;
+}
+
+function modalCliente(cli) {
+  const esNuevo = !cli;
+  const c = cli ? Object.assign({}, cli) : {};
+  if (esNuevo) {
+    const ids = (STATE.data.clientes || []).map(x => Number(x.cliente_id) || 0);
+    c.cliente_id = (ids.length ? Math.max(...ids) : 0) + 1;
+    c.is_active = true;
+    c.fecha_alta = hoyIso();
+    c.usuario_alta = STATE.usuario || 'sistema';
+    c.timestamp_alta = hoyTimestamp();
+  }
+  const fields = el('div', { class: 'grid-2' });
+  const refs = {};
+  const addField = (k, label, opts = {}) => {
+    let inp;
+    if (opts.options) {
+      inp = el('select', { class: 'form-select' });
+      opts.options.forEach(o => {
+        const opt = el('option', { value: o }, o);
+        if (String(c[k] ?? '') === String(o)) opt.selected = true;
+        inp.appendChild(opt);
+      });
+    } else {
+      inp = el('input', { class: 'form-input', type: opts.type || 'text' });
+      if (c[k] != null) inp.value = c[k];
+    }
+    refs[k] = inp;
+    fields.appendChild(el('div', { class: 'form-row' }, [
+      el('label', { class: 'form-label' }, label),
+      inp,
+    ]));
+  };
+
+  addField('cliente_id', 'Cliente ID', { type: 'number' });
+  addField('nombre', 'Nombre *');
+  addField('nic', 'NIC *', { type: 'number' });
+  addField('direccion', 'Dirección');
+  addField('ciudad', 'Ciudad');
+  addField('nivel_tension', 'Nivel tensión', { options: ['', 'BT', 'MT', 'AT'] });
+  addField('tipo_contrato', 'Tipo contrato', { options: ['', 'Energía', 'Energía+Potencia', 'PPA', 'MTD', 'PMC'] });
+  addField('moneda_facturacion', 'Moneda', { options: ['USD', 'DOP'] });
+  addField('adenda_vigente_id', 'Adenda vigente ID', { type: 'number' });
+  addField('hoja_calculo', 'Hoja cálculo');
+  addField('fecha_alta', 'Fecha alta', { type: 'date' });
+  addField('fecha_baja', 'Fecha baja', { type: 'date' });
+  addField('usuario_alta', 'Usuario alta');
+  addField('is_active', 'Activo', { options: ['TRUE', 'FALSE'] });
+
+  if (!esNuevo) refs['is_active'].value = esActivo(c.is_active) ? 'TRUE' : 'FALSE';
+
+  const notasArea = el('textarea', { class: 'form-textarea', rows: '2' });
+  notasArea.value = c.notas || '';
+  fields.appendChild(el('div', { class: 'form-row span-2' }, [
+    el('label', { class: 'form-label' }, 'Notas'),
+    notasArea,
+  ]));
+
+  openModal({
+    title: esNuevo ? 'Nuevo cliente' : `Cliente: ${c.nombre}`,
+    wide: true,
+    body: fields,
+    footer: [
+      !esNuevo ? el('button', { class: 'btn btn-danger', onclick: () => darBajaCliente(c) }, 'Dar de baja') : null,
+      el('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
+      el('button', { class: 'btn btn-primary', onclick: () => guardarCliente(c, esNuevo, refs, notasArea) }, 'Guardar'),
+    ].filter(Boolean),
+  });
+}
+
+function guardarCliente(c, esNuevo, refs, notasArea) {
+  Object.entries(refs).forEach(([k, inp]) => {
+    let v = inp.value;
+    if (k === 'is_active') v = (v === 'TRUE');
+    else if (['cliente_id','nic','adenda_vigente_id'].includes(k) && v !== '') v = Number(v);
+    c[k] = v === '' ? null : v;
+  });
+  c.notas = notasArea.value;
+  if (!c.nombre || c.nic == null || c.nic === '') { toast('Nombre y NIC son obligatorios', 'warning'); return; }
+  const dup = (STATE.data.clientes || []).find(x =>
+    Number(x.nic) === Number(c.nic) && Number(x.cliente_id) !== Number(c.cliente_id));
+  if (dup) { toast(`NIC ${c.nic} ya existe (cliente ${dup.cliente_id})`, 'warning'); return; }
+
+  if (esNuevo) STATE.data.clientes.push(c);
+  else {
+    const idx = STATE.data.clientes.findIndex(x => Number(x.cliente_id) === Number(c.cliente_id));
+    if (idx >= 0) STATE.data.clientes[idx] = c;
+  }
+  markDirty();
+  closeModal();
+  toast('Cliente guardado', 'success');
+  render();
+}
+
+function darBajaCliente(c) {
+  confirmDialog(`¿Dar de baja al cliente "${c.nombre}"?`, () => {
+    c.is_active = false;
+    c.fecha_baja = hoyIso();
+    markDirty();
+    closeModal();
+    toast('Cliente dado de baja', 'warning');
+    render();
+  });
+}
+
+/* ============ ADENDAS ============ */
+
+function renderAdendas(main) {
+  const clientes = STATE.data.clientes || [];
+  const adendas = STATE.data.adendas || [];
+
+  const selCli = el('select', { class: 'form-select form-select-sm', id: 'adCliente', style: 'width:280px;' });
+  selCli.appendChild(el('option', { value: '' }, '— Todos los clientes —'));
+  clientes.filter(c => esActivo(c.is_active))
+    .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || '')))
+    .forEach(c => selCli.appendChild(el('option', { value: c.cliente_id }, `${c.nombre} (${c.nic || ''})`)));
+
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [
+    el('h1', {}, 'Adendas'),
+    el('div', { class: 'page-actions' }, [
+      selCli,
+      el('button', { class: 'btn btn-primary btn-sm', onclick: () => modalAdenda() }, '+ Nueva adenda'),
+    ]),
+  ]));
+
+  const cont = el('div', { class: 'card', id: 'adCont' });
+  main.appendChild(cont);
+
+  function pintar() {
+    const cliId = selCli.value;
+    let rows = adendas.slice();
+    if (cliId) rows = rows.filter(a => String(a.cliente_id) === String(cliId));
+    rows.sort((a, b) => {
+      const da = serialAFecha(a.fecha_inicio_vigencia);
+      const db = serialAFecha(b.fecha_inicio_vigencia);
+      return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+    });
+    cont.innerHTML = '';
+    if (cliId) cont.appendChild(renderTimelineAdendas(rows, clientes));
+    else cont.appendChild(renderTablaAdendas(rows, clientes));
+    $('#badgeAdendas').textContent = rows.length;
+  }
+  pintar();
+  selCli.onchange = pintar;
+}
+
+function renderTablaAdendas(rows, clientes) {
+  const tbody = el('tbody', {});
+  if (!rows.length) {
+    tbody.appendChild(el('tr', {}, [el('td', { colspan: '10', style: 'text-align:center;padding:32px;color:var(--text-muted);' }, 'No hay adendas')]));
+  } else {
+    rows.slice(0, 500).forEach(a => {
+      const cli = clientes.find(c => Number(c.cliente_id) === Number(a.cliente_id));
+      const btnEdit = el('button', { class: 'btn btn-sm', onclick: (e) => { e.stopPropagation(); modalAdenda(a); } }, '✎');
+      tbody.appendChild(el('tr', { onclick: () => modalAdenda(a), style: 'cursor:pointer;' }, [
+        el('td', {}, String(a.adenda_id || '')),
+        el('td', {}, cli ? cli.nombre : `[ID ${a.cliente_id}]`),
+        el('td', {}, String(a.num_romano || '')),
+        el('td', {}, fmtFecha(a.fecha_inicio_vigencia)),
+        el('td', {}, fmtFecha(a.fecha_fin_vigencia)),
+        el('td', {}, fmt.num(a.precio_energia, 4)),
+        el('td', {}, fmt.num(a.precio_pot_punta, 2)),
+        el('td', {}, String(a.estado || '')),
+        el('td', {}, esActivo(a.vigente) ? [el('span', { class: 'badge ok' }, '● Vigente')] : ''),
+        el('td', {}, [btnEdit]),
+      ]));
+    });
+  }
+  return el('div', { class: 'tbl-wrap' }, [
+    el('table', { class: 'tbl' }, [
+      el('thead', {}, [el('tr', {}, ['ID','Cliente','Romano','Inicio','Fin','P. Energía','P. Pot Punta','Estado','Vigente',''].map(h => el('th', {}, h)))]),
+      tbody,
+    ]),
+  ]);
+}
+
+function renderTimelineAdendas(rows, clientes) {
+  if (!rows.length) return el('div', { style: 'padding:32px;text-align:center;color:var(--text-muted);' }, 'Este cliente no tiene adendas');
+  const cli = clientes.find(c => Number(c.cliente_id) === Number(rows[0].cliente_id));
+  const items = rows.map(a => {
+    const head = el('div', { class: 'timeline-head' }, [
+      el('span', { class: 'badge ' + (esActivo(a.vigente) ? 'ok' : '') }, `Adenda ${a.num_romano || a.adenda_id}`),
+      el('span', { class: 'muted' }, `${fmtFecha(a.fecha_inicio_vigencia)} → ${fmtFecha(a.fecha_fin_vigencia)}`),
+    ]);
+    const body = el('div', { class: 'grid-3', style: 'margin-top:8px;font-size:13px;' }, [
+      el('div', {}, [el('span', { class: 'muted' }, 'P. Energía: '), document.createTextNode(fmt.num(a.precio_energia, 4))]),
+      el('div', {}, [el('span', { class: 'muted' }, 'P. Pot Punta: '), document.createTextNode(fmt.num(a.precio_pot_punta, 2))]),
+      el('div', {}, [el('span', { class: 'muted' }, 'P. Pot Base: '), document.createTextNode(fmt.num(a.precio_pot_base, 2))]),
+      el('div', {}, [el('span', { class: 'muted' }, 'FNP: '), document.createTextNode(fmt.num(a.fnp, 4))]),
+      el('div', {}, [el('span', { class: 'muted' }, 'FNE: '), document.createTextNode(fmt.num(a.fne, 4))]),
+      el('div', {}, [el('span', { class: 'muted' }, 'Techo monómico: '), document.createTextNode(fmt.num(a.techo_monomico, 4))]),
+    ]);
+    const item = el('div', { class: 'timeline-item' + (esActivo(a.vigente) ? ' vigente' : ''), onclick: () => modalAdenda(a) }, [head, body]);
+    if (a.archivo_pdf_url) {
+      const lnk = el('a', { href: a.archivo_pdf_url, target: '_blank', class: 'muted', style: 'font-size:12px;display:inline-block;margin-top:6px;', onclick: e => e.stopPropagation() }, '📎 Ver PDF');
+      item.appendChild(lnk);
+    }
+    return item;
+  });
+  return el('div', { style: 'padding:16px 24px;' }, [
+    el('h2', { style: 'margin-bottom:16px;font-size:18px;' }, cli ? cli.nombre : `Cliente ${rows[0].cliente_id}`),
+    el('div', { class: 'timeline' }, items),
+  ]);
+}
+
+function modalAdenda(adn) {
+  const esNuevo = !adn;
+  const a = adn ? Object.assign({}, adn) : {};
+  if (esNuevo) {
+    const ids = (STATE.data.adendas || []).map(x => Number(x.adenda_id) || 0);
+    a.adenda_id = (ids.length ? Math.max(...ids) : 0) + 1;
+    a.estado = 'activa';
+    a.vigente = false;
+    a.usuario_carga = STATE.usuario || 'sistema';
+    a.timestamp_carga = hoyTimestamp();
+  }
+  const refs = {};
+  const fields = el('div', { class: 'grid-3' });
+  const addF = (k, label, opts = {}) => {
+    let inp;
+    if (opts.options) {
+      inp = el('select', { class: 'form-select' });
+      opts.options.forEach(o => {
+        const opt = el('option', { value: o }, String(o));
+        if (String(a[k] ?? '') === String(o)) opt.selected = true;
+        inp.appendChild(opt);
+      });
+    } else {
+      inp = el('input', { class: 'form-input', type: opts.type || 'text' });
+      if (a[k] != null) inp.value = a[k];
+    }
+    refs[k] = inp;
+    fields.appendChild(el('div', { class: 'form-row' }, [el('label', { class: 'form-label' }, label), inp]));
+  };
+  const clientes = STATE.data.clientes || [];
+  const cliOpts = ['', ...clientes.map(c => String(c.cliente_id))];
+
+  addF('adenda_id', 'Adenda ID', { type: 'number' });
+  addF('cliente_id', 'Cliente ID *', { options: cliOpts });
+  addF('num_romano', 'Núm. romano');
+  addF('col_origen', 'Col. origen');
+  addF('fecha_firma', 'Fecha firma', { type: 'date' });
+  addF('fecha_inicio_vigencia', 'Inicio vigencia', { type: 'date' });
+  addF('fecha_fin_vigencia', 'Fin vigencia', { type: 'date' });
+  addF('estado', 'Estado', { options: ['activa', 'vencida', 'cancelada'] });
+  addF('vigente', 'Vigente', { options: ['TRUE', 'FALSE'] });
+  if (!esNuevo) refs['vigente'].value = esActivo(a.vigente) ? 'TRUE' : 'FALSE';
+  addF('precio_energia', 'Precio energía', { type: 'number' });
+  addF('clave_precio', 'Clave precio');
+  addF('precio_pot_punta', 'Precio pot. punta', { type: 'number' });
+  addF('precio_pot_base', 'Precio pot. base', { type: 'number' });
+  addF('fnp', 'FNP', { type: 'number' });
+  addF('fne', 'FNE', { type: 'number' });
+  addF('techo_energia', 'Techo energía', { type: 'number' });
+  addF('techo_monomico', 'Techo monómico', { type: 'number' });
+  addF('hfo6_base', 'HFO6 base', { type: 'number' });
+  addF('cpi_energia_base', 'CPI energía base', { type: 'number' });
+  addF('cpi_potencia_base', 'CPI potencia base', { type: 'number' });
+  addF('regla_potencia', 'Regla potencia');
+  addF('archivo_pdf_url', 'URL PDF');
+  addF('usuario_carga', 'Usuario carga');
+
+  const notasArea = el('textarea', { class: 'form-textarea', rows: '2' });
+  notasArea.value = a.notas || '';
+  fields.appendChild(el('div', { class: 'form-row span-3' }, [
+    el('label', { class: 'form-label' }, 'Notas'),
+    notasArea,
+  ]));
+
+  openModal({
+    title: esNuevo ? 'Nueva adenda' : `Adenda #${a.adenda_id}`,
+    wide: true,
+    body: fields,
+    footer: [
+      el('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
+      el('button', { class: 'btn btn-primary', onclick: () => guardarAdenda(a, esNuevo, refs, notasArea) }, 'Guardar'),
+    ],
+  });
+}
+
+function guardarAdenda(a, esNuevo, refs, notasArea) {
+  Object.entries(refs).forEach(([k, inp]) => {
+    let v = inp.value;
+    if (k === 'vigente') v = (v === 'TRUE');
+    else if (['adenda_id','cliente_id','precio_energia','precio_pot_punta','precio_pot_base',
+              'fnp','fne','techo_energia','techo_monomico','hfo6_base',
+              'cpi_energia_base','cpi_potencia_base'].includes(k) && v !== '') v = Number(v);
+    a[k] = v === '' ? null : v;
+  });
+  a.notas = notasArea.value;
+  if (!a.cliente_id) { toast('Cliente obligatorio', 'warning'); return; }
+  if (a.precio_energia != null && Number(a.precio_energia) < 0) { toast('Precio energía no puede ser negativo', 'warning'); return; }
+
+  if (esActivo(a.vigente)) {
+    STATE.data.adendas.forEach(x => {
+      if (Number(x.cliente_id) === Number(a.cliente_id) && Number(x.adenda_id) !== Number(a.adenda_id)) {
+        x.vigente = false;
+      }
+    });
+    const cli = STATE.data.clientes.find(c => Number(c.cliente_id) === Number(a.cliente_id));
+    if (cli) cli.adenda_vigente_id = a.adenda_id;
+  }
+
+  if (esNuevo) STATE.data.adendas.push(a);
+  else {
+    const idx = STATE.data.adendas.findIndex(x => Number(x.adenda_id) === Number(a.adenda_id));
+    if (idx >= 0) STATE.data.adendas[idx] = a;
+  }
+  markDirty();
+  closeModal();
+  toast('Adenda guardada', 'success');
+  render();
+}
+
+/* ============ VARIABLES MENSUALES ============ */
+
+function renderVariables(main) {
+  const variables = (STATE.data.variables || []).slice();
+  variables.sort((a, b) => String(b.iso_mes || '').localeCompare(String(a.iso_mes || '')));
+
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [
+    el('h1', {}, 'Variables Mensuales'),
+    el('div', { class: 'page-actions' }, [
+      el('button', { class: 'btn btn-sm', onclick: abrirSiguienteMes }, '+ Abrir siguiente mes'),
+      el('button', { class: 'btn btn-warning btn-sm', onclick: cerrarMesActual }, '🔒 Cerrar mes actual'),
+    ]),
+  ]));
+
+  const tbody = el('tbody', {});
+  variables.slice(0, 60).forEach(v => {
+    const cerrado = String(v.estado_cierre || '').toLowerCase() === 'cerrado';
+    const badge = cerrado
+      ? el('span', { class: 'badge danger' }, '🔒 Cerrado')
+      : el('span', { class: 'badge ok' }, 'Abierto');
+    const btn = el('button', { class: 'btn btn-sm', onclick: () => modalVariableMes(v, cerrado) }, cerrado ? '👁' : '✎');
+    tbody.appendChild(el('tr', {}, [
+      el('td', { style: 'font-weight:500;' }, String(v.iso_mes || '')),
+      el('td', {}, fmt.num(v.hfo_6, 2)),
+      el('td', {}, fmt.num(v.hfo_2, 2)),
+      el('td', {}, fmt.num(v.cpi, 3)),
+      el('td', {}, fmt.num(v.tc, 4)),
+      el('td', {}, fmt.num(v.fnp_edenorte, 4)),
+      el('td', {}, fmt.num(v.fne_edenorte, 4)),
+      el('td', {}, fmt.num(v.pmc_edn_usd_kwh, 5)),
+      el('td', {}, [badge]),
+      el('td', {}, [btn]),
+    ]));
+  });
+
+  main.appendChild(el('div', { class: 'card' }, [
+    el('div', { class: 'card-title' }, `Últimas 60 entradas — ${variables.length} totales`),
+    el('div', { class: 'tbl-wrap' }, [
+      el('table', { class: 'tbl' }, [
+        el('thead', {}, [el('tr', {}, ['Mes','HFO6','HFO2','CPI','TC','FNP','FNE','PMC EDN','Estado',''].map(h => el('th', {}, h)))]),
+        tbody,
+      ]),
+    ]),
+  ]));
+}
+
+function modalVariableMes(v, soloLectura) {
+  const r = Object.assign({}, v);
+  const refs = {};
+  const fields = el('div', { class: 'grid-3' });
+  const addF = (k, label, type = 'number') => {
+    const inp = el('input', { class: 'form-input', type, step: 'any' });
+    if (r[k] != null) inp.value = r[k];
+    if (soloLectura) inp.disabled = true;
+    refs[k] = inp;
+    fields.appendChild(el('div', { class: 'form-row' }, [el('label', { class: 'form-label' }, label), inp]));
+  };
+  addF('iso_mes', 'ISO Mes', 'text');
+  addF('hfo_6', 'HFO 6');
+  addF('hfo_2', 'HFO 2');
+  addF('carbon', 'Carbón');
+  addF('gas', 'Gas');
+  addF('cpi', 'CPI');
+  addF('pot_barre_ref', 'Pot. Barre Ref.');
+  addF('dc', 'DC');
+  addF('tc', 'Tasa Cambio (TC)');
+  addF('fnp_edenorte', 'FNP Edenorte');
+  addF('fne_edenorte', 'FNE Edenorte');
+  addF('pmc_edn_usd_kwh', 'PMC EDN USD/kWh');
+
+  openModal({
+    title: `Variables — ${r.iso_mes}${soloLectura ? ' (cerrado)' : ''}`,
+    wide: true,
+    body: fields,
+    footer: [
+      el('button', { class: 'btn', onclick: closeModal }, 'Cerrar'),
+      !soloLectura ? el('button', { class: 'btn btn-primary', onclick: () => guardarVariableMes(r, refs) }, 'Guardar') : null,
+    ].filter(Boolean),
+  });
+}
+
+function guardarVariableMes(r, refs) {
+  Object.entries(refs).forEach(([k, inp]) => {
+    let v = inp.value;
+    if (k === 'iso_mes') r[k] = v.trim();
+    else r[k] = v === '' ? null : Number(v);
+  });
+  const idx = STATE.data.variables.findIndex(x => x.iso_mes === r.iso_mes);
+  if (idx >= 0) STATE.data.variables[idx] = r;
+  else STATE.data.variables.push(r);
+  markDirty();
+  closeModal();
+  toast(`Variables ${r.iso_mes} actualizadas`, 'success');
+  render();
+}
+
+function abrirSiguienteMes() {
+  const variables = STATE.data.variables || [];
+  if (!variables.length) { toast('No hay variables previas', 'warning'); return; }
+  const ultimoMes = variables.map(v => v.iso_mes).filter(Boolean).sort().pop();
+  const nuevo = mesSiguiente(ultimoMes);
+  if (!nuevo) { toast('No se pudo calcular el mes siguiente', 'warning'); return; }
+  if (variables.find(v => v.iso_mes === nuevo)) { toast(`El mes ${nuevo} ya existe`, 'warning'); return; }
+  confirmDialog(`¿Crear entrada para ${nuevo} copiando valores de ${ultimoMes}?`, () => {
+    const prev = variables.find(v => v.iso_mes === ultimoMes);
+    const nv = Object.assign({}, prev, {
+      iso_mes: nuevo,
+      anio: Number(nuevo.slice(0, 4)),
+      mes: Number(nuevo.slice(5, 7)),
+      estado_cierre: 'Abierto',
+      usuario_cierre: null,
+      timestamp_cierre: null,
+    });
+    STATE.data.variables.push(nv);
+    markDirty();
+    toast(`Mes ${nuevo} abierto`, 'success');
+    render();
+  });
+}
+
+function cerrarMesActual() {
+  const mes = STATE.isoMesActual;
+  if (!mes) { toast('No hay mes actual configurado', 'warning'); return; }
+  const v = (STATE.data.variables || []).find(x => x.iso_mes === mes);
+  if (!v) { toast(`No existe entrada para ${mes}`, 'warning'); return; }
+  if (String(v.estado_cierre || '').toLowerCase() === 'cerrado') { toast('Ya está cerrado', 'warning'); return; }
+  confirmDialog(`¿Cerrar el mes ${mes}? Esto bloqueará la edición de sus variables.`, () => {
+    v.estado_cierre = 'Cerrado';
+    v.usuario_cierre = STATE.usuario || 'sistema';
+    v.timestamp_cierre = hoyTimestamp();
+    markDirty();
+    toast(`Mes ${mes} cerrado`, 'success');
+    render();
+  });
+}
+/* ====================================================================
+ * PARTE 4 — Carga Mensual, Historial, Reportes, Config, Ayuda, INIT
+ * ==================================================================== */
+
+/* ============ CARGA MENSUAL ============ */
+
+function renderCarga(main) {
+  const mes = STATE.isoMesActual || hoyIso().slice(0, 7);
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [
+    el('h1', {}, `Carga Mensual \u2014 ${mes}`),
+    el('div', { class: 'page-actions' }, [
+      el('button', { class: 'btn btn-sm', onclick: agregarFilaCarga }, '+ Agregar fila'),
+      el('button', { class: 'btn btn-sm', onclick: modalCargaCSV }, '📋 Cargar lote CSV'),
+      el('button', { class: 'btn btn-sm', onclick: limpiarFilasVacias }, '🧹 Limpiar vacías'),
+      el('button', { class: 'btn btn-primary btn-sm', onclick: procesarAcciones }, '⚡ Procesar acciones'),
+    ]),
+  ]));
+
+  const cont = el('div', { class: 'card' }, [
+    el('div', { id: 'cargaInfo', class: 'card-title' }, '...'),
+    el('div', { class: 'tbl-wrap', style: 'max-height:70vh;overflow:auto;' }, [
+      el('table', { class: 'tbl tbl-compact', id: 'tblCarga' }, [
+        el('thead', {}, [el('tr', {}, [
+          '#','Acción','NIC','Cliente','Adenda','Moneda','Fecha Lect.','NCF',
+          'F37 kWh','F38 Pot.F','F40 PotPunta','F41 PotBaseF','F42 PotBaseL','F43 React%',
+          'F49 PrE','F50 PrP','F53','F54','F59','F71 TC','Ing.US$','Estado','Notas',
+        ].map(h => el('th', {}, h)))]),
+        el('tbody', { id: 'cargaBody' }),
+      ]),
+    ]),
+  ]);
+  main.appendChild(cont);
+
+  gridCarga();
+}
+
+function gridCarga() {
+  const tbody = $('#cargaBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const filas = STATE.data.cargaMes || [];
+  filas.forEach((f, i) => tbody.appendChild(filaCarga(f, i)));
+  recalcularBadges();
+}
+
+function filaCarga(f, idx) {
+  const clientes = STATE.data.clientes || [];
+  const adendas = STATE.data.adendas || [];
+  const variables = STATE.data.variables || [];
+  const cli = clientes.find(c => Number(c.nic) === Number(f.NIC));
+  const adn = cli ? adendas.find(a => Number(a.adenda_id) === Number(cli.adenda_vigente_id)) : null;
+  const mes = STATE.isoMesActual || hoyIso().slice(0, 7);
+  const varMes = variables.find(v => v.iso_mes === mes);
+  const tc = varMes ? (Number(varMes.tc) || 0) : 0;
+
+  if (cli) {
+    f.Cliente = cli.nombre;
+    f.Moneda = f.Moneda || cli.moneda_facturacion || 'USD';
+    f['Tipo Contrato'] = cli.tipo_contrato || '';
+  }
+  if (adn) {
+    f['Adenda Vig.'] = adn.num_romano || adn.adenda_id;
+    if (f.F49 == null || f.F49 === '') f.F49 = adn.precio_energia;
+    if (f.F50 == null || f.F50 === '') f.F50 = adn.precio_pot_punta;
+  }
+  const F37 = Number(f.F37) || 0;
+  const F38 = Number(f.F38) || 0;
+  const F49 = Number(f.F49) || 0;
+  const F50 = Number(f.F50) || 0;
+  const F53 = F37 * F49;
+  const F54 = F38 * F50;
+  const F59 = F53 + F54;
+  f.F53 = F53; f.F54 = F54; f.F59 = F59; f.F71 = tc;
+  const ingreso = (f.Moneda === 'USD') ? F59 : (tc > 0 ? F59 / tc : 0);
+  f['Ingreso US$ Eq'] = ingreso;
+
+  const yaFacturado = facturaExiste(cli ? cli.cliente_id : null, mes);
+  const estadoTxt = yaFacturado ? 'YA FACTURADO' : (F37 > 0 ? 'Listo p/ confirmar' : 'Incompleto');
+  const estadoCls = yaFacturado ? 'danger' : (F37 > 0 ? 'ok' : 'warning');
+
+  const mkInp = (key, w, type = 'text') => {
+    const inp = el('input', { class: 'tbl-input', type, 'data-key': key, 'data-idx': String(idx) });
+    if (w) inp.style.width = w;
+    if (type === 'number') inp.step = 'any';
+    if (f[key] != null) inp.value = f[key];
+    inp.addEventListener('input', e => actualizarCelda(idx, key, e.target.value));
+    if (key === 'NIC') inp.addEventListener('blur', () => recalcularFila(idx));
+    return inp;
+  };
+  const mkSel = (key, opts) => {
+    const sel = el('select', { class: 'tbl-input' });
+    opts.forEach(o => {
+      const opt = el('option', { value: o }, o);
+      if (String(f[key] ?? '') === String(o)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', e => { actualizarCelda(idx, key, e.target.value); recalcularFila(idx); });
+    return sel;
+  };
+
+  const advE = (adn && (adn.precio_energia == null || adn.precio_energia === '')) ? ' cell-warning' : '';
+  const advP = (adn && (adn.precio_pot_punta == null || adn.precio_pot_punta === '')) ? ' cell-warning' : '';
+
+  return el('tr', { class: yaFacturado ? 'row-locked' : '' }, [
+    el('td', {}, String(idx + 1)),
+    el('td', {}, [mkSel('Acción', ['PENDIENTE','CONFIRMAR','EDITAR'])]),
+    el('td', {}, [mkInp('NIC', '90px', 'number')]),
+    el('td', { style: 'font-weight:500;white-space:nowrap;' }, String(f.Cliente || '\u2014')),
+    el('td', {}, String(f['Adenda Vig.'] || '')),
+    el('td', {}, [mkSel('Moneda', ['USD','DOP'])]),
+    el('td', {}, [mkInp('Fecha Lectura', '120px', 'date')]),
+    el('td', {}, [mkInp('NCF', '110px')]),
+    el('td', {}, [mkInp('F37', '90px', 'number')]),
+    el('td', {}, [mkInp('F38', '80px', 'number')]),
+    el('td', {}, [mkInp('F40', '80px', 'number')]),
+    el('td', {}, [mkInp('F41', '80px', 'number')]),
+    el('td', {}, [mkInp('F42', '80px', 'number')]),
+    el('td', {}, [mkInp('F43', '70px', 'number')]),
+    el('td', { class: ('num' + advE).trim() }, [mkInp('F49', '85px', 'number')]),
+    el('td', { class: ('num' + advP).trim() }, [mkInp('F50', '85px', 'number')]),
+    el('td', { class: 'num' }, fmt.num(F53, 2)),
+    el('td', { class: 'num' }, fmt.num(F54, 2)),
+    el('td', { class: 'num', style: 'font-weight:600;' }, fmt.num(F59, 2)),
+    el('td', { class: 'num' }, fmt.num(tc, 4)),
+    el('td', { class: 'num', style: 'font-weight:600;color:var(--accent);' }, fmt.usd(ingreso)),
+    el('td', {}, [el('span', { class: 'badge ' + estadoCls }, estadoTxt)]),
+    el('td', {}, [mkInp('Notas', '140px')]),
+  ]);
+}
+
+function actualizarCelda(idx, key, val) {
+  const f = STATE.data.cargaMes[idx];
+  if (!f) return;
+  const numericos = ['NIC','F37','F38','F40','F41','F42','F43','F49','F50'];
+  if (numericos.includes(key)) f[key] = val === '' ? '' : Number(val);
+  else f[key] = val;
+  markDirty();
+  // Solo redibujamos si el cambio afecta cálculos
+  if (numericos.includes(key) || key === 'Moneda') recalcularFila(idx);
+  else recalcularBadges();
+}
+
+function recalcularFila(idx) {
+  const tbody = $('#cargaBody');
+  if (!tbody) return;
+  const oldRow = tbody.children[idx];
+  if (!oldRow) return;
+  const newRow = filaCarga(STATE.data.cargaMes[idx], idx);
+  tbody.replaceChild(newRow, oldRow);
+  recalcularBadges();
+}
+
+function recalcularBadges() {
+  const filas = STATE.data.cargaMes || [];
+  const pendientes = filas.filter(f =>
+    Number(f.F37) > 0 && f['Acción'] !== 'PENDIENTE' && !facturaExiste(buscarCliId(f.NIC), STATE.isoMesActual)
+  ).length;
+  const totalListas = filas.filter(f => Number(f.F37) > 0).length;
+  const elCarga = $('#badgeCarga');
+  if (elCarga) elCarga.textContent = String(filas.filter(f => f.NIC).length);
+  const info = $('#cargaInfo');
+  if (info) info.textContent = `${filas.length} filas \u2014 ${totalListas} con datos \u2014 ${pendientes} marcadas para confirmar`;
+}
+
+function buscarCliId(nic) {
+  if (nic == null || nic === '') return null;
+  const c = (STATE.data.clientes || []).find(x => Number(x.nic) === Number(nic));
+  return c ? c.cliente_id : null;
+}
+
+function facturaExiste(cliId, mes) {
+  if (!cliId || !mes) return false;
+  return (STATE.data.historial || []).some(h =>
+    Number(h['Cliente ID']) === Number(cliId) &&
+    h['ISO Mes'] === mes &&
+    h.Estado !== 'anulada'
+  );
+}
+
+function agregarFilaCarga() {
+  if (!STATE.data.cargaMes) STATE.data.cargaMes = [];
+  STATE.data.cargaMes.push({
+    'Acción': 'PENDIENTE', NIC: '', Cliente: '', 'Adenda Vig.': '', 'Tipo Contrato': '',
+    Moneda: 'USD', 'Fecha Lectura': '', NCF: '',
+    F37: '', F38: '', F40: '', F41: '', F42: '', F43: '', F49: '', F50: '',
+    F53: 0, F54: 0, F59: 0, F71: 0, 'Ingreso US$ Eq': 0, Estado: '', Notas: '',
+  });
+  markDirty();
+  gridCarga();
+}
+
+function limpiarFilasVacias() {
+  const antes = (STATE.data.cargaMes || []).length;
+  STATE.data.cargaMes = (STATE.data.cargaMes || []).filter(f => (f.NIC != null && f.NIC !== '') || (f.F37 != null && f.F37 !== ''));
+  const desp = STATE.data.cargaMes.length;
+  if (antes !== desp) { markDirty(); gridCarga(); toast(`${antes - desp} filas vacías eliminadas`, 'success'); }
+  else toast('No había filas vacías', 'info');
+}
+
+function procesarAcciones() {
+  const filas = STATE.data.cargaMes || [];
+  const mes = STATE.isoMesActual;
+  if (!mes) { toast('Configure el iso_mes_actual primero', 'warning'); return; }
+  const variables = STATE.data.variables || [];
+  const varMes = variables.find(v => v.iso_mes === mes);
+
+  const aConfirmar = filas.filter(f => f['Acción'] === 'CONFIRMAR');
+  if (!aConfirmar.length) { toast('No hay filas marcadas como CONFIRMAR', 'warning'); return; }
+
+  const errores = [];
+  for (const f of aConfirmar) {
+    const cli = (STATE.data.clientes || []).find(c => Number(c.nic) === Number(f.NIC));
+    if (!cli) { errores.push(`NIC ${f.NIC}: cliente no encontrado`); continue; }
+    if (!(Number(f.F37) > 0)) { errores.push(`${cli.nombre}: F37 (kWh) debe ser > 0`); continue; }
+    if (facturaExiste(cli.cliente_id, mes)) { errores.push(`${cli.nombre}: ya existe factura para ${mes}`); continue; }
+    if (f.Moneda === 'DOP' && (!varMes || !(Number(varMes.tc) > 0))) {
+      errores.push(`${cli.nombre}: moneda DOP requiere TC válido en variables del mes ${mes}`);
+      continue;
+    }
+  }
+  if (errores.length) {
+    openModal({
+      title: 'Errores de validación',
+      body: el('div', {}, [
+        el('p', { class: 'muted', style: 'margin-bottom:12px;' }, `${errores.length} error(es) impiden el procesamiento:`),
+        el('ul', { style: 'margin-left:20px;line-height:1.8;color:var(--danger);' },
+          errores.map(e => el('li', {}, e))),
+      ]),
+      footer: [el('button', { class: 'btn', onclick: closeModal }, 'Cerrar')],
+    });
+    return;
+  }
+
+  confirmDialog(`¿Confirmar ${aConfirmar.length} facturas al historial?`, () => {
+    const usuario = STATE.usuario || 'sistema';
+    const ts = hoyTimestamp();
+    const nuevas = [];
+    for (const f of aConfirmar) {
+      const cli = (STATE.data.clientes || []).find(c => Number(c.nic) === Number(f.NIC));
+      const adn = (STATE.data.adendas || []).find(a => Number(a.adenda_id) === Number(cli.adenda_vigente_id));
+      nuevas.push({
+        'Cliente ID': cli.cliente_id,
+        'NIC': f.NIC,
+        'Cliente': cli.nombre,
+        'ISO Mes': mes,
+        'Fecha Lectura': f['Fecha Lectura'],
+        'Adenda': adn ? (adn.num_romano || adn.adenda_id) : '',
+        'Moneda': f.Moneda,
+        'NCF': f.NCF,
+        'F37 kWh': Number(f.F37) || 0,
+        'F38 Pot Fact': Number(f.F38) || 0,
+        'F40': Number(f.F40) || 0,
+        'F41': Number(f.F41) || 0,
+        'F42': Number(f.F42) || 0,
+        'F43': Number(f.F43) || 0,
+        'F49': Number(f.F49) || 0,
+        'F50': Number(f.F50) || 0,
+        'F53': Number(f.F53) || 0,
+        'F54': Number(f.F54) || 0,
+        'F59': Number(f.F59) || 0,
+        'F71 TC': Number(f.F71) || 0,
+        'Ingreso US$ Eq': Number(f['Ingreso US$ Eq']) || 0,
+        'Estado': 'facturada',
+        'Usuario': usuario,
+        'Timestamp': ts,
+        'Notas': f.Notas || '',
+      });
+    }
+    STATE.data.historial.push(...nuevas);
+    STATE.data.cargaMes = filas.filter(f => f['Acción'] !== 'CONFIRMAR');
+    markDirty();
+    toast(`${nuevas.length} facturas confirmadas al historial`, 'success');
+    render();
+  });
+}
+
+function modalCargaCSV() {
+  const ta = el('textarea', { class: 'form-textarea', rows: '14',
+    placeholder: '12345\t01-2026\t125000\t100\t50\t50\t50\t98\t2026-04-30\tnota\n67890\t01-2026\t98000\t80\t40\t40\t40\t95\t2026-04-30\t' });
+  openModal({
+    title: 'Cargar lote desde CSV',
+    wide: true,
+    body: el('div', {}, [
+      el('p', { class: 'muted', style: 'margin-bottom:12px;font-size:13px;' },
+        'Pega filas separadas por TAB o coma. Columnas en este orden: NIC, NCF, F37, F38, F40, F41, F42, F43, FechaLectura, Notas'),
+      ta,
+    ]),
+    footer: [
+      el('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
+      el('button', { class: 'btn btn-primary', onclick: () => importarCSV(ta.value) }, 'Importar'),
+    ],
+  });
+}
+
+function importarCSV(raw) {
+  const data = (raw || '').trim();
+  if (!data) { closeModal(); return; }
+  const lineas = data.split(/\r?\n/);
+  let count = 0;
+  for (const ln of lineas) {
+    const cols = ln.split(/\t|,/);
+    if (cols.length < 3) continue;
+    const [nic, ncf, f37, f38, f40, f41, f42, f43, fl, notas] = cols.map(s => (s || '').trim());
+    STATE.data.cargaMes.push({
+      'Acción': 'PENDIENTE',
+      NIC: nic ? Number(nic) : '',
+      NCF: ncf || '',
+      F37: f37 ? Number(f37) : '',
+      F38: f38 ? Number(f38) : '',
+      F40: f40 ? Number(f40) : '',
+      F41: f41 ? Number(f41) : '',
+      F42: f42 ? Number(f42) : '',
+      F43: f43 ? Number(f43) : '',
+      'Fecha Lectura': fl || '',
+      Notas: notas || '',
+      Cliente: '',
+      'Adenda Vig.': '',
+      Moneda: 'USD',
+    });
+    count++;
+  }
+  markDirty();
+  closeModal();
+  toast(`${count} filas importadas`, 'success');
+  render();
+}
+
+/* ============ HISTORIAL ============ */
+
+const HIST_PAGE_SIZE = 500;
+
+function renderHistorial(main) {
+  const historial = STATE.data.historial || [];
+  const meses = Array.from(new Set(historial.map(h => h['ISO Mes']).filter(Boolean))).sort().reverse();
+
+  const selMes = el('select', { class: 'form-select form-select-sm', style: 'width:150px;' });
+  selMes.appendChild(el('option', { value: '' }, '— Todos los meses —'));
+  meses.forEach(m => selMes.appendChild(el('option', { value: m }, m)));
+
+  const selMon = el('select', { class: 'form-select form-select-sm', style: 'width:120px;' }, [
+    el('option', { value: '' }, '— Moneda —'),
+    el('option', { value: 'USD' }, 'USD'),
+    el('option', { value: 'DOP' }, 'DOP'),
+  ]);
+  const inpCli = el('input', { class: 'form-input form-input-sm', placeholder: '🔍 Cliente...', style: 'width:220px;' });
+
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [
+    el('h1', {}, 'Historial Facturado'),
+    el('div', { class: 'page-actions' }, [
+      selMes, selMon, inpCli,
+      el('button', { class: 'btn btn-sm', onclick: () => exportarCSV(selMes.value) }, '⬇ CSV'),
+    ]),
+  ]));
+
+  const cont = el('div', { class: 'card' }, [
+    el('div', { id: 'hInfo', class: 'card-title' }, '...'),
+    el('div', { class: 'tbl-wrap', style: 'max-height:70vh;' }, [
+      el('table', { class: 'tbl', id: 'tblHistorial' }, [
+        el('thead', {}, [el('tr', {}, ['Mes','Cliente','NIC','Adenda','Moneda','kWh','F59','Ingreso US$','Estado','Usuario'].map(h => el('th', {}, h)))]),
+        el('tbody', { id: 'hBody' }),
+      ]),
+    ]),
+  ]);
+  main.appendChild(cont);
+
+  function pintar() {
+    const mes = selMes.value;
+    const moneda = selMon.value;
+    const q = (inpCli.value || '').toLowerCase().trim();
+    let rows = historial.slice();
+    if (mes) rows = rows.filter(h => h['ISO Mes'] === mes);
+    if (moneda) rows = rows.filter(h => h.Moneda === moneda);
+    if (q) rows = rows.filter(h => String(h.Cliente || '').toLowerCase().includes(q) || String(h.NIC || '').includes(q));
+    rows.sort((a, b) => String(b['ISO Mes'] || '').localeCompare(String(a['ISO Mes'] || '')));
+    const shown = rows.slice(0, HIST_PAGE_SIZE);
+    const totUsd = rows.reduce((s, h) => s + (Number(h['Ingreso US$ Eq']) || 0), 0);
+
+    $('#hInfo').textContent = `${rows.length} facturas \u2014 Total US$ ${fmt.usd(totUsd)} (mostrando ${shown.length})`;
+    $('#badgeHistorial').textContent = String(rows.length);
+    const body = $('#hBody');
+    body.innerHTML = '';
+    if (!shown.length) {
+      body.appendChild(el('tr', {}, [el('td', { colspan: '10', style: 'text-align:center;padding:32px;color:var(--text-muted);' }, 'Sin resultados')]));
+      return;
+    }
+    shown.forEach(h => {
+      const badge = el('span', { class: 'badge ' + (h.Estado === 'anulada' ? 'danger' : 'ok') }, String(h.Estado || 'facturada'));
+      body.appendChild(el('tr', { onclick: () => modalDetalleFactura(h), style: 'cursor:pointer;' }, [
+        el('td', { style: 'font-weight:500;' }, String(h['ISO Mes'] || '')),
+        el('td', {}, String(h.Cliente || '')),
+        el('td', {}, String(h.NIC || '')),
+        el('td', {}, String(h.Adenda || '')),
+        el('td', {}, String(h.Moneda || '')),
+        el('td', { class: 'num' }, fmt.num(h['F37 kWh'], 0)),
+        el('td', { class: 'num' }, fmt.num(h.F59, 2)),
+        el('td', { class: 'num', style: 'font-weight:600;color:var(--accent);' }, fmt.usd(h['Ingreso US$ Eq'])),
+        el('td', {}, [badge]),
+        el('td', {}, String(h.Usuario || '')),
+      ]));
+    });
+  }
+  pintar();
+  selMes.onchange = pintar;
+  selMon.onchange = pintar;
+  inpCli.oninput = pintar;
+}
+
+function modalDetalleFactura(h) {
+  const kv = el('div', { class: 'grid-2', style: 'font-size:13px;' });
+  COL_HISTORIAL.forEach(k => {
+    kv.appendChild(el('div', { class: 'kv' }, [
+      el('span', { class: 'kv-label' }, k),
+      el('span', { class: 'kv-value' }, String(h[k] ?? '')),
+    ]));
+  });
+  openModal({
+    title: `Factura: ${h.Cliente} \u2014 ${h['ISO Mes']}`,
+    wide: true,
+    body: kv,
+    footer: [
+      h.Estado !== 'anulada'
+        ? el('button', { class: 'btn btn-danger', onclick: () => anularFactura(h) }, 'Anular factura')
+        : null,
+      el('button', { class: 'btn', onclick: closeModal }, 'Cerrar'),
+    ].filter(Boolean),
+  });
+}
+
+function anularFactura(h) {
+  confirmDialog(`¿Anular la factura de ${h.Cliente} (${h['ISO Mes']})?\n\nNo se elimina, solo se marca como anulada.`, () => {
+    h.Estado = 'anulada';
+    h.Notas = (h.Notas || '') + ` [anulada ${hoyTimestamp()} por ${STATE.usuario || 'sistema'}]`;
+    markDirty();
+    closeModal();
+    toast('Factura anulada', 'warning');
+    render();
+  });
+}
+
+function exportarCSV(mesFiltro) {
+  const historial = STATE.data.historial || [];
+  let rows = historial.slice();
+  if (mesFiltro) rows = rows.filter(h => h['ISO Mes'] === mesFiltro);
+  if (!rows.length) { toast('Nada que exportar', 'warning'); return; }
+  const headers = COL_HISTORIAL;
+  const lines = [headers.join(',')];
+  for (const r of rows) {
+    lines.push(headers.map(k => {
+      const v = r[k] ?? '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    }).join(','));
+  }
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `historial_${mesFiltro || 'todo'}_${hoyIso()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`${rows.length} filas exportadas a CSV`, 'success');
+}
+
+/* ============ REPORTES ============ */
+
+function renderReportes(main) {
+  const mesDef = STATE.isoMesActual || hoyIso().slice(0, 7);
+  const historial = STATE.data.historial || [];
+  const meses = Array.from(new Set(historial.map(h => h['ISO Mes']).filter(Boolean))).sort().reverse();
+  if (!meses.includes(mesDef)) meses.unshift(mesDef);
+
+  const selMes = el('select', { class: 'form-select form-select-sm', style: 'width:160px;' });
+  meses.forEach(m => {
+    const opt = el('option', { value: m }, m);
+    if (m === mesDef) opt.selected = true;
+    selMes.appendChild(opt);
+  });
+
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head no-print' }, [
+    el('h1', {}, 'Reportes'),
+    el('div', { class: 'page-actions' }, [
+      selMes,
+      el('button', { class: 'btn btn-primary btn-sm', onclick: () => window.print() }, '🖨️ Imprimir / PDF'),
+    ]),
+  ]));
+
+  const cont = el('div', { class: 'card', id: 'repCont' });
+  main.appendChild(cont);
+
+  function pintar() {
+    const m = selMes.value || mesDef;
+    const rows = historial.filter(h => h['ISO Mes'] === m && h.Estado !== 'anulada');
+    const totKwh = rows.reduce((s, h) => s + (Number(h['F37 kWh']) || 0), 0);
+    const totUsd = rows.reduce((s, h) => s + (Number(h['Ingreso US$ Eq']) || 0), 0);
+    const prom = rows.length ? totUsd / rows.length : 0;
+
+    const detalleTbody = el('tbody', {});
+    rows.forEach((r, i) => {
+      detalleTbody.appendChild(el('tr', {}, [
+        el('td', {}, String(i + 1)),
+        el('td', {}, String(r.Cliente || '')),
+        el('td', {}, String(r.NIC || '')),
+        el('td', {}, String(r.Moneda || '')),
+        el('td', { class: 'num' }, fmt.num(r['F37 kWh'], 0)),
+        el('td', { class: 'num' }, fmt.num(r.F59, 2)),
+        el('td', { class: 'num', style: 'font-weight:600;' }, fmt.usd(r['Ingreso US$ Eq'])),
+      ]));
+    });
+    detalleTbody.appendChild(el('tr', { style: 'font-weight:700;border-top:2px solid var(--text);' }, [
+      el('td', { colspan: '4' }, 'TOTAL'),
+      el('td', { class: 'num' }, fmt.num(totKwh, 0)),
+      el('td', {}, ''),
+      el('

@@ -655,7 +655,7 @@
     </div>
     <div class="header-pill mono" id="hdrMes">— sin archivo —</div>
     <div class="header-pill" id="hdrStatus">Sin cargar</div>
-    <div class="header-pill" id="hdrModo" title="Modo de conexión a OneDrive" style="cursor:pointer;">📥 Manual</div>
+    <div class="header-pill" id="hdrModo" title="Modo de conexion a OneDrive" style="cursor:pointer;">Manual</div>
 
     <div style="flex:1"></div>
 
@@ -737,7 +737,6 @@ const STATE = {
   fileName: 'Facturacion UNR (Ronald). 02-24 mas reciente nuevo CLAUDE.xlsx',
   dirty: false,
   route: 'dashboard',
-  // 'manual' = descarga/re-upload | 'directo' = MSAL.js + Graph PUT
   modoConexion: localStorage.getItem('unr_modo_conexion') || 'manual',
   msal: { app: null, account: null, token: null, driveItemId: null, driveId: null },
   data: {
@@ -952,8 +951,8 @@ async function descargarDesdeOneDrive(url) {
 }
 
 /* ============================================================================
- * MSAL.js — Acceso directo a OneDrive vía Microsoft Graph
- * client_id público de Graph Explorer: de8bc8b5-d9f9-48b1-a8ad-b748da725064
+ * MSAL.js - Acceso directo a OneDrive via Microsoft Graph
+ * client_id publico de Graph Explorer: de8bc8b5-d9f9-48b1-a8ad-b748da725064
  * ============================================================================ */
 const MSAL_CONFIG = {
   auth: {
@@ -967,7 +966,7 @@ const MSAL_SCOPES = ['Files.ReadWrite', 'Files.ReadWrite.All', 'User.Read'];
 
 function msalEnsureApp() {
   if (STATE.msal.app) return STATE.msal.app;
-  if (typeof msal === 'undefined') throw new Error('MSAL no se cargó (CDN bloqueado?)');
+  if (typeof msal === 'undefined') throw new Error('MSAL no se cargo (CDN bloqueado?)');
   STATE.msal.app = new msal.PublicClientApplication(MSAL_CONFIG);
   return STATE.msal.app;
 }
@@ -979,7 +978,7 @@ async function msalLogin() {
     STATE.msal.account = resp.account;
     STATE.msal.token = resp.accessToken;
     app.setActiveAccount(resp.account);
-    toast(`Conectado como ${resp.account.username}`, 'success');
+    toast('Conectado como ' + resp.account.username, 'success');
     return resp;
   } catch (e) {
     console.error(e);
@@ -1008,12 +1007,10 @@ function msalLogout() {
   if (!app) return;
   app.logoutPopup({ account: STATE.msal.account });
   STATE.msal = { app, account: null, token: null, driveItemId: null, driveId: null };
-  toast('Sesión cerrada', 'info');
+  toast('Sesion cerrada', 'info');
 }
 
-// Codifica una URL compartida en el formato sharing token que Graph entiende
 function encodeShareUrl(shareUrl) {
-  // Base64-url-safe encoding del URL completo, con prefijo 'u!'
   const b64 = btoa(shareUrl).replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
   return 'u!' + b64;
 }
@@ -1021,12 +1018,12 @@ function encodeShareUrl(shareUrl) {
 async function graphResolveDriveItem(shareUrl) {
   const token = await msalGetToken();
   const shareId = encodeShareUrl(shareUrl);
-  const r = await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem`, {
+  const r = await fetch('https://graph.microsoft.com/v1.0/shares/' + shareId + '/driveItem', {
     headers: { Authorization: 'Bearer ' + token },
   });
   if (!r.ok) {
     const txt = await r.text();
-    throw new Error('Graph resolve falló (' + r.status + '): ' + txt.slice(0, 200));
+    throw new Error('Graph resolve fallo (' + r.status + '): ' + txt.slice(0, 200));
   }
   const item = await r.json();
   STATE.msal.driveItemId = item.id;
@@ -1043,10 +1040,10 @@ async function descargarConGraph(shareUrl) {
     const item = await graphResolveDriveItem(shareUrl);
     const token = await msalGetToken();
     toast('Descargando contenido (' + Math.round((item.size || 0) / 1024) + ' KB)...', 'info');
-    const r = await fetch(`https://graph.microsoft.com/v1.0/drives/${item.parentReference.driveId}/items/${item.id}/content`, {
+    const r = await fetch('https://graph.microsoft.com/v1.0/drives/' + item.parentReference.driveId + '/items/' + item.id + '/content', {
       headers: { Authorization: 'Bearer ' + token },
     });
-    if (!r.ok) throw new Error('GET content falló: ' + r.status);
+    if (!r.ok) throw new Error('GET content fallo: ' + r.status);
     const buf = await r.arrayBuffer();
     const wb = XLSX.read(buf, { cellFormula: true, cellStyles: true, sheetStubs: true, cellDates: false });
     STATE.wb = wb;
@@ -1061,7 +1058,7 @@ async function descargarConGraph(shareUrl) {
     render();
   } catch (e) {
     console.error(e);
-    toast('MSAL falló: ' + (e.message || e) + '. Cae a modo manual.', 'error', 7000);
+    toast('MSAL fallo: ' + (e.message || e) + '. Cae a modo manual.', 'error', 7000);
     STATE.modoConexion = 'manual';
     localStorage.setItem('unr_modo_conexion', 'manual');
     actualizarBadgeModo();
@@ -1071,11 +1068,10 @@ async function descargarConGraph(shareUrl) {
 async function guardarConGraph() {
   if (!STATE.wb) { toast('Carga un Excel primero', 'warning'); return; }
   if (!STATE.msal.driveItemId) {
-    toast('No hay archivo enlazado vía Graph. Recarga en modo directo.', 'warning');
+    toast('No hay archivo enlazado via Graph. Recarga en modo directo.', 'warning');
     return;
   }
   try {
-    // Sincronizar TODAS las hojas vivas igual que el guardado manual
     sincronizarHoja(SHEETS.CLIENTES, STATE.data.clientes);
     sincronizarHoja(SHEETS.ADENDAS, STATE.data.adendas);
     sincronizarHoja(SHEETS.VARIABLES, STATE.data.variables);
@@ -1086,7 +1082,7 @@ async function guardarConGraph() {
     const wbout = XLSX.write(STATE.wb, { bookType: 'xlsx', type: 'array', cellStyles: true, compression: true });
     const token = await msalGetToken();
     toast('Subiendo a OneDrive (' + Math.round(wbout.byteLength / 1024) + ' KB)...', 'info');
-    const url = `https://graph.microsoft.com/v1.0/drives/${STATE.msal.driveId}/items/${STATE.msal.driveItemId}/content`;
+    const url = 'https://graph.microsoft.com/v1.0/drives/' + STATE.msal.driveId + '/items/' + STATE.msal.driveItemId + '/content';
     const r = await fetch(url, {
       method: 'PUT',
       headers: {
@@ -1097,25 +1093,25 @@ async function guardarConGraph() {
     });
     if (!r.ok) {
       const txt = await r.text();
-      throw new Error('PUT falló (' + r.status + '): ' + txt.slice(0, 300));
+      throw new Error('PUT fallo (' + r.status + '): ' + txt.slice(0, 300));
     }
     markDirty(false);
-    toast('✓ Guardado directamente en OneDrive', 'success', 4000);
+    toast('Guardado directamente en OneDrive', 'success', 4000);
   } catch (e) {
     console.error(e);
-    toast('Falló el guardado directo: ' + (e.message || e) + '. Usa modo manual.', 'error', 8000);
+    toast('Fallo el guardado directo: ' + (e.message || e) + '. Usa modo manual.', 'error', 8000);
   }
 }
 
 function actualizarBadgeModo() {
-  const badge = $('#hdrModo');
+  const badge = document.querySelector('#hdrModo');
   if (!badge) return;
   if (STATE.modoConexion === 'directo' && STATE.msal.account) {
-    badge.textContent = '⚡ Directo · ' + STATE.msal.account.username;
+    badge.textContent = 'Directo - ' + STATE.msal.account.username;
     badge.style.background = 'var(--success-soft)';
     badge.style.color = 'var(--success)';
   } else {
-    badge.textContent = '📥 Manual';
+    badge.textContent = 'Manual';
     badge.style.background = 'var(--bg-sunken)';
     badge.style.color = 'var(--text-muted)';
   }
@@ -1218,7 +1214,6 @@ function leerConfig(wb) {
 
 function guardarYDescargar() {
   if (!STATE.wb) { toast('Carga un Excel primero', 'warning'); return; }
-  // Si estamos en modo directo y hay sesión MSAL, escribir directo a OneDrive
   if (STATE.modoConexion === 'directo' && STATE.msal.driveItemId) {
     return guardarConGraph();
   }
@@ -1379,8 +1374,8 @@ function mostrarModalCarga() {
 
   const tab3 = el('div', { id: 'tab-msal', class: 'hidden' }, [
     el('p', { style: 'color: var(--text-muted); margin-bottom: 12px;' },
-      '\u26A1 Login con tu cuenta @edenorte.com.do (popup Microsoft). Lectura y escritura directa al .xlsx. ' +
-      'Si IT bloquea el client_id p\u00FAblico, caemos a modo manual autom\u00E1ticamente.'),
+      'Login con tu cuenta @edenorte.com.do (popup Microsoft). Lectura y escritura directa al .xlsx. ' +
+      'Si IT bloquea el client_id publico, caemos a modo manual automaticamente.'),
     el('div', { class: 'form-field full' }, [
       el('label', { class: 'form-label' }, 'URL compartida de OneDrive'),
       el('input', { class: 'form-input', type: 'url', id: 'inputUrlMsal', value: savedUrl, placeholder: 'https://...sharepoint.com/...' }),
@@ -1388,11 +1383,11 @@ function mostrarModalCarga() {
     el('div', { style: 'display:flex; gap:8px; margin-top: 12px; flex-wrap:wrap;' }, [
       el('button', { class: 'btn btn-primary', onclick: () => {
         descargarConGraph($('#inputUrlMsal').value.trim());
-      }}, '\u26A1 Login y cargar'),
-      el('button', { class: 'btn', onclick: () => msalLogout() }, 'Cerrar sesi\u00F3n MSAL'),
+      }}, 'Login y cargar'),
+      el('button', { class: 'btn', onclick: () => msalLogout() }, 'Cerrar sesion MSAL'),
     ]),
     el('div', { style: 'margin-top: 16px; font-size: 12px; color: var(--text-faint);' },
-      'client_id: de8bc8b5-d9f9-48b1-a8ad-b748da725064 (Graph Explorer p\u00FAblico, sin Azure AD).'),
+      'client_id: de8bc8b5-d9f9-48b1-a8ad-b748da725064 (Graph Explorer publico, sin Azure AD).'),
   ]);
 
   openModal({
@@ -1401,7 +1396,7 @@ function mostrarModalCarga() {
       el('div', { class: 'tabs' }, [
         el('div', { class: 'tab active', 'data-tab': 'local', onclick: (e) => switchTab(e, 'local') }, 'Subir archivo local'),
         el('div', { class: 'tab', 'data-tab': 'onedrive', onclick: (e) => switchTab(e, 'onedrive') }, 'OneDrive (fetch)'),
-        el('div', { class: 'tab', 'data-tab': 'msal', onclick: (e) => switchTab(e, 'msal') }, '\u26A1 Directo (MSAL)'),
+        el('div', { class: 'tab', 'data-tab': 'msal', onclick: (e) => switchTab(e, 'msal') }, 'Directo (MSAL)'),
       ]),
       tab1,
       tab2,
@@ -2729,4 +2724,195 @@ function renderReportes(main) {
       el('td', { colspan: '4' }, 'TOTAL'),
       el('td', { class: 'num' }, fmt.num(totKwh, 0)),
       el('td', {}, ''),
-      el('
+      el('td', { class: 'num' }, fmt.usd(totUsd)),
+    ]));
+
+    cont.innerHTML = '';
+    cont.appendChild(el('div', { class: 'print-doc' }, [
+      el('div', { class: 'print-head' }, [
+        el('div', { class: 'print-logo' }, 'EDENORTE DOMINICANA, S.A.'),
+        el('h1', {}, `Reporte de Facturación UNR \u2014 ${m}`),
+        el('p', { class: 'muted' }, `Generado: ${hoyTimestamp().slice(0, 16).replace('T', ' ')} | Usuario: ${STATE.usuario || 'sistema'}`),
+      ]),
+      el('h3', { style: 'margin-top:16px;font-size:14px;' }, 'Resumen ejecutivo'),
+      el('div', { class: 'kpi-grid', style: 'margin-bottom:16px;' }, [
+        kpi('N° facturas', String(rows.length), m),
+        kpi('Total kWh', fmt.num(totKwh, 0), m),
+        kpi('Total US$', fmt.usd(totUsd), m),
+        kpi('Promedio', fmt.usd(prom), 'por factura'),
+      ]),
+      el('h3', { style: 'margin-top:8px;font-size:14px;' }, 'Detalle de facturas'),
+      el('table', { class: 'tbl print-tbl' }, [
+        el('thead', {}, [el('tr', {}, ['#','Cliente','NIC','Moneda','kWh','F59','Ingreso US$'].map(h => el('th', {}, h)))]),
+        detalleTbody,
+      ]),
+      el('div', { class: 'print-firma' }, [
+        el('div', {}, [
+          el('div', { class: 'firma-line' }),
+          el('p', {}, 'Preparado por'),
+          el('p', { class: 'muted' }, STATE.usuario || '\u2014'),
+        ]),
+        el('div', {}, [
+          el('div', { class: 'firma-line' }),
+          el('p', {}, 'Aprobado por'),
+          el('p', { class: 'muted' }, 'Gerencia Compra de Energía'),
+        ]),
+      ]),
+    ]));
+  }
+  pintar();
+  selMes.onchange = pintar;
+}
+
+/* ============ CONFIG ============ */
+
+function renderConfig(main) {
+  const sheets = STATE.wb ? STATE.wb.SheetNames : [];
+  const live = [
+    SHEETS.CLIENTES, SHEETS.ADENDAS, SHEETS.REGLAS, SHEETS.CALENDARIO,
+    SHEETS.VARIABLES, SHEETS.CARGA, SHEETS.HISTORIAL, SHEETS.CONFIG,
+  ];
+
+  const inpMes = el('input', { class: 'form-input', placeholder: 'YYYY-MM' });
+  inpMes.value = STATE.isoMesActual || '';
+  const inpUsr = el('input', { class: 'form-input' });
+  inpUsr.value = STATE.usuario || '';
+  const inpUrl = el('input', { class: 'form-input' });
+  inpUrl.value = localStorage.getItem('unr_onedrive_url') || '';
+
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [el('h1', {}, 'Configuración')]));
+
+  main.appendChild(el('div', { class: 'card' }, [
+    el('div', { class: 'card-title' }, 'Parámetros del sistema'),
+    el('div', { class: 'grid-2' }, [
+      el('div', { class: 'form-row' }, [
+        el('label', { class: 'form-label' }, 'Mes en curso (iso_mes_actual)'),
+        inpMes,
+      ]),
+      el('div', { class: 'form-row' }, [
+        el('label', { class: 'form-label' }, 'Usuario'),
+        inpUsr,
+      ]),
+      el('div', { class: 'form-row span-2' }, [
+        el('label', { class: 'form-label' }, 'URL OneDrive (caché localStorage)'),
+        inpUrl,
+      ]),
+    ]),
+    el('div', { style: 'margin-top:16px;display:flex;gap:8px;' }, [
+      el('button', { class: 'btn btn-primary', onclick: () => guardarConfig(inpMes, inpUsr, inpUrl) }, 'Aplicar configuración'),
+      el('button', { class: 'btn', onclick: limpiarCache }, 'Limpiar caché local'),
+    ]),
+  ]));
+
+  const sheetCols = el('div', { style: 'columns:3;column-gap:24px;font-size:13px;line-height:1.8;' });
+  sheets.forEach(s => sheetCols.appendChild(el('div', {}, `${live.includes(s) ? '🟢' : '⚪'} ${s}`)));
+
+  main.appendChild(el('div', { class: 'card' }, [
+    el('div', { class: 'card-title' }, `Archivo cargado \u2014 ${STATE.fileName || '(no cargado)'}`),
+    el('div', { class: 'muted', style: 'font-size:12px;margin-bottom:12px;' },
+      `${sheets.length} hojas detectadas | 🟢 = activa (HTML escribe) | ⚪ = legacy (preservar intacta)`),
+    sheetCols,
+  ]));
+}
+
+function guardarConfig(inpMes, inpUsr, inpUrl) {
+  STATE.isoMesActual = inpMes.value.trim();
+  STATE.usuario = inpUsr.value.trim() || 'sistema';
+  localStorage.setItem('unr_onedrive_url', inpUrl.value.trim());
+  markDirty();
+  $('#hdrMes').textContent = STATE.isoMesActual ? `Mes: ${STATE.isoMesActual}` : '\u2014 sin mes \u2014';
+  toast('Configuración aplicada', 'success');
+}
+
+function limpiarCache() {
+  confirmDialog('¿Borrar tema, URL OneDrive y demás caché local?', () => {
+    const keys = ['unr_theme', 'unr_onedrive_url'];
+    keys.forEach(k => localStorage.removeItem(k));
+    toast('Caché local borrada', 'warning');
+  });
+}
+
+/* ============ AYUDA ============ */
+
+function renderAyuda(main) {
+  main.innerHTML = '';
+  main.appendChild(el('div', { class: 'page-head' }, [el('h1', {}, 'Ayuda')]));
+  main.appendChild(el('div', { class: 'card', style: 'max-width:880px;' }, [
+    el('h3', { style: 'font-size:15px;margin-bottom:8px;' }, '📖 Flujo recomendado'),
+    el('ol', { style: 'margin:8px 0 24px 24px;line-height:1.9;font-size:13px;' }, [
+      el('li', {}, 'Cargar el .xlsx desde OneDrive (drag & drop preferido por restricciones CORS).'),
+      el('li', {}, 'Verificar mes en curso en Configuración. Abrir el siguiente mes si toca cierre.'),
+      el('li', {}, 'Capturar lecturas en Carga Mensual. Para lotes grandes, usar "Cargar lote CSV".'),
+      el('li', {}, 'Marcar Acción = CONFIRMAR en las filas listas y procesar acciones.'),
+      el('li', {}, 'Revisar Dashboard y anomalías. Exportar reportes desde Reportes (PDF nativo navegador).'),
+      el('li', {}, 'Pulsar "Guardar Excel" → descarga el archivo → arrastrar a la carpeta OneDrive.'),
+    ]),
+    el('h3', { style: 'font-size:15px;margin-bottom:8px;' }, '⚠️ Limitaciones conocidas'),
+    el('ul', { style: 'margin:8px 0 24px 24px;line-height:1.9;font-size:13px;' }, [
+      el('li', {}, 'SheetJS Community CDN NO preserva estilos visuales al reescribir. Las hojas legacy mantienen su contenido y fórmulas pero pueden perder colores/formatos. Para preservar formato 100%, abrir el .xlsx original en Excel y pegar manualmente las hojas vivas modificadas.'),
+      el('li', {}, 'Fetch directo a sharepoint.com puede fallar por CORS desde file:// o GitHub Pages. La opción drag & drop local es la ruta confiable.'),
+      el('li', {}, 'Fórmulas complejas (LAMBDA, LET) en hojas legacy se preservan a nivel celda, pero conviene NO tocar esas hojas.'),
+      el('li', {}, 'Este sistema no modifica directamente OneDrive: descarga el .xlsx y el usuario lo re-sube.'),
+    ]),
+    el('h3', { style: 'font-size:15px;margin-bottom:8px;' }, '🔧 Atajos'),
+    el('ul', { style: 'margin:8px 0 24px 24px;line-height:1.9;font-size:13px;' }, [
+      el('li', {}, [el('b', {}, 'Ctrl/Cmd + S'), ' \u2014 guardar y descargar Excel']),
+      el('li', {}, [el('b', {}, 'Ctrl/Cmd + O'), ' \u2014 abrir archivo']),
+      el('li', {}, [el('b', {}, 'Esc'), ' \u2014 cerrar modal']),
+    ]),
+    el('p', { class: 'muted', style: 'font-size:12px;margin-top:24px;' },
+      'EDENORTE Dominicana \u2014 Gerencia de Compra de Energía. Sistema interno UNR.'),
+  ]));
+}
+
+/* ============ INIT ============ */
+
+function init() {
+  const tema = localStorage.getItem('unr_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', tema);
+  const btnTheme = $('#btnTheme');
+  if (btnTheme) btnTheme.textContent = tema === 'dark' ? '☀️' : '🌙';
+
+  if (btnTheme) btnTheme.onclick = () => {
+    const cur = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('unr_theme', next);
+    btnTheme.textContent = next === 'dark' ? '☀️' : '🌙';
+    if (STATE.route === 'dashboard') render();
+  };
+  const btnLoad = $('#btnLoad');
+  if (btnLoad) btnLoad.onclick = mostrarModalCarga;
+  const btnSave = $('#btnSave');
+  if (btnSave) btnSave.onclick = guardarYDescargar;
+
+  const hdrModo = $('#hdrModo');
+  if (hdrModo) hdrModo.onclick = mostrarModalCarga;
+  actualizarBadgeModo();
+
+  setupNav();
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (STATE.wb) guardarYDescargar(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); mostrarModalCarga(); }
+    if (e.key === 'Escape') closeModal();
+  });
+
+  window.addEventListener('beforeunload', e => {
+    if (STATE.dirty) { e.preventDefault(); e.returnValue = ''; return ''; }
+  });
+
+  const initial = document.querySelector('.nav-item[data-route="dashboard"]');
+  if (initial) initial.classList.add('active');
+
+  render();
+
+  if (!STATE.wb) setTimeout(mostrarModalCarga, 400);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>
